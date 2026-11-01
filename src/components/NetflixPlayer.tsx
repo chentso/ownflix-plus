@@ -1802,6 +1802,18 @@ export default function NetflixPlayer({
 
         {/* Right Top: Watch Together Button & Stream Quality Badge */}
         <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Current Playback Speed Badge */}
+          <button
+            onClick={() =>
+              setActivePopover((p) => (p === "speed" ? "none" : "speed"))
+            }
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border bg-black/60 border-zinc-600 text-zinc-100 hover:border-white transition-colors"
+            title="Current Playback Speed"
+          >
+            <Gauge className="w-3.5 h-3.5 text-[#E50914]" />
+            <span>Speed: {playbackSpeed}x</span>
+          </button>
+
           {/* Watch Together Button */}
           <button
             onClick={() =>
@@ -2422,9 +2434,12 @@ export default function NetflixPlayer({
                             backgroundColor: p.avatarColor || "#ffffff",
                           }}
                         />
-                        {/* Hover Username Tooltip */}
-                        <div className="opacity-0 group-hover/tick:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 rounded bg-black/95 border border-zinc-700 text-[11px] font-semibold text-white whitespace-nowrap pointer-events-none shadow-lg z-30">
-                          {p.profileName}
+                        {/* Hover Username & Speed Tooltip */}
+                        <div className="opacity-0 group-hover/tick:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1 rounded bg-black/95 border border-zinc-700 text-xs font-semibold text-white whitespace-nowrap pointer-events-none shadow-lg z-30 flex items-center gap-1.5">
+                          <span>{p.profileName}</span>
+                          <span className="text-emerald-400 font-mono">
+                            {p.playbackRate}x
+                          </span>
                         </div>
                       </div>
                     );
@@ -2606,15 +2621,15 @@ export default function NetflixPlayer({
               onClick={() =>
                 setActivePopover((p) => (p === "speed" ? "none" : "speed"))
               }
-              className={`hover:text-white transition-colors flex items-center gap-1 ${
+              className={`hover:text-white transition-colors flex items-center gap-1.5 ${
                 activePopover === "speed" ? "text-[#E50914]" : "text-white"
               }`}
               title="Playback Speed"
             >
               <Gauge className="w-6 h-6" />
-              {playbackSpeed !== 1 && (
-                <span className="text-xs font-bold">{playbackSpeed}x</span>
-              )}
+              <span className="text-xs sm:text-sm font-bold font-mono">
+                {playbackSpeed}x
+              </span>
             </button>
 
             <button
