@@ -25,7 +25,6 @@ import {
   Users,
   Copy,
   Flag,
-  Zap,
   Flame,
   X,
   MessageSquare,
@@ -1232,8 +1231,6 @@ export default function NetflixPlayer({
     return Object.values(room.participants).sort((a, b) => a.rank - b.rank);
   }, [room]);
 
-  const myParticipant = room?.participants[participantIdRef.current];
-
   return (
     <div
       ref={containerRef}
@@ -1375,47 +1372,21 @@ export default function NetflixPlayer({
         </div>
       </div>
 
-      {/* Watch Together Status Banner (All-Pause or Pace Sync Speed Status) */}
-      {room && (
-        <div className="relative z-20 mx-auto px-4 pointer-events-none">
-          {room.mode === "ALL_PAUSE" &&
-            (!room.isPlaying || room.bufferingProfileName) && (
-              <div className="bg-black/85 border border-amber-500/70 text-amber-200 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full shadow-2xl flex items-center gap-2">
-                <Pause className="w-4 h-4 text-amber-400 fill-amber-400" />
-                <span>
-                  {room.bufferingProfileName
-                    ? `All Paused: Waiting for ${room.bufferingProfileName} (buffering)...`
-                    : `All Paused by ${room.pausedByProfileName || "viewer"}`}
-                </span>
-              </div>
-            )}
-
-          {room.mode === "PACE_SYNC" && myParticipant && (
-            <div className="bg-black/80 border border-zinc-700/80 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-xl flex items-center gap-3">
-              <span className="text-amber-400 flex items-center gap-1">
-                <Flag className="w-3.5 h-3.5" />
-                {formatOrdinal(myParticipant.rank)} Position
+      {/* Watch Together All-Pause Status Banner */}
+      {room &&
+        room.mode === "ALL_PAUSE" &&
+        (!room.isPlaying || room.bufferingProfileName) && (
+          <div className="relative z-20 mx-auto px-4 pointer-events-none">
+            <div className="bg-black/85 border border-amber-500/70 text-amber-200 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full shadow-2xl flex items-center gap-2">
+              <Pause className="w-4 h-4 text-amber-400 fill-amber-400" />
+              <span>
+                {room.bufferingProfileName
+                  ? `All Paused: Waiting for ${room.bufferingProfileName} (buffering)...`
+                  : `All Paused by ${room.pausedByProfileName || "viewer"}`}
               </span>
-              <span className="text-zinc-600">•</span>
-              {myParticipant.playbackRate > 1.3 ? (
-                <span className="text-[#E50914] flex items-center gap-1">
-                  <Flame className="w-3.5 h-3.5 fill-[#E50914]" />
-                  1.4x Catch-Up Boost!
-                </span>
-              ) : myParticipant.playbackRate < 1.1 ? (
-                <span className="text-sky-400 flex items-center gap-1">
-                  1.0x Leader Slowdown (Waiting for group)
-                </span>
-              ) : (
-                <span className="text-emerald-400 flex items-center gap-1">
-                  <Zap className="w-3.5 h-3.5 fill-emerald-400" />
-                  1.25x Pace Sync Cruise
-                </span>
-              )}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
       {/* Auto-Adaptive Slow Connection Toast */}
       {adaptiveBanner && (
