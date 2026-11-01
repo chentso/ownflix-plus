@@ -686,13 +686,6 @@ export default function OwnFlixApp() {
                         <Play className="w-6 h-6 fill-black ml-0.5" />
                       </div>
                     </div>
-                    {item.filePath && (
-                      <span className="absolute top-2 left-2 bg-black/80 border border-emerald-500/40 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded">
-                        {item.filePath.toLowerCase().endsWith(".mkv")
-                          ? "MKV"
-                          : "LOCAL MP4"}
-                      </span>
-                    )}
                   </div>
                   <div className="p-3.5 flex-1 flex flex-col justify-between">
                     <div>

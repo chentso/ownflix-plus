@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  HardDrive,
   MoreVertical,
 } from "lucide-react";
 
@@ -103,8 +102,6 @@ export default function MediaRow({
                   )
                 : 0;
 
-            const isMkv = item.filePath?.toLowerCase().endsWith(".mkv");
-
             return (
               <div
                 key={item.id}
@@ -129,19 +126,6 @@ export default function MediaRow({
                     className="w-full h-full object-cover object-center group-hover/card:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-black/25 opacity-90" />
-
-                  {/* Top-Left OwnFlix+ Badge */}
-                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                    <span className="bg-[#2563EB] text-white font-black text-[10px] px-1.5 py-0.5 rounded-sm shadow">
-                      O+
-                    </span>
-                    {item.filePath && (
-                      <span className="bg-black/80 backdrop-blur-sm border border-zinc-600 text-[9px] font-bold text-emerald-400 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <HardDrive className="w-2.5 h-2.5" />
-                        {isMkv ? "MKV" : "LOCAL"}
-                      </span>
-                    )}
-                  </div>
 
                   {/* Top-Right Context Menu Trigger & Remove from Continue Watching */}
                   <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
