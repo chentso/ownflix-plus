@@ -4,6 +4,10 @@ import React, { useState } from "react";
 import { Profile } from "@/types/ownflix";
 import { AVATAR_ICONS, renderProfileIcon } from "./ProfileGate";
 import {
+  generateFunnyProfileName,
+  generateFunnyNameSuggestions,
+} from "@/lib/nameGenerator";
+import {
   X,
   KeyRound,
   Lock,
@@ -12,6 +16,8 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
+  Dices,
+  RefreshCw,
 } from "lucide-react";
 
 const AVATAR_COLORS = [
@@ -35,8 +41,17 @@ export default function ProfileAccountModal({
   onProfileUpdated,
 }: ProfileAccountModalProps) {
   const [name, setName] = useState(profile.name);
+  const [funnySuggestions, setFunnySuggestions] = useState<string[]>(() =>
+    generateFunnyNameSuggestions(3)
+  );
   const [avatarColor, setAvatarColor] = useState(profile.avatarColor);
   const [avatarIcon, setAvatarIcon] = useState(profile.avatarIcon);
+
+  const handleRollFunnyName = () => {
+    const rolled = generateFunnyProfileName();
+    setName(rolled);
+    setFunnySuggestions(generateFunnyNameSuggestions(3));
+  };
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -177,16 +192,65 @@ export default function ProfileAccountModal({
           </div>
 
           <div className="flex-1">
-            <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1">
-              Display Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs uppercase tracking-wider text-zinc-400">
+                Display Name
+              </label>
+              <button
+                type="button"
+                onClick={handleRollFunnyName}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#3B82F6] hover:text-blue-300 transition-colors"
+                title="Generate a funny unique profile name"
+              >
+                <Dices className="w-3.5 h-3.5" />
+                <span>Funny Name</span>
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none pr-10"
+              />
+              <button
+                type="button"
+                onClick={handleRollFunnyName}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#3B82F6] p-1 rounded transition-colors"
+                title="Roll another funny name"
+              >
+                <Dices className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Funny Name Suggestion Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                Ideas:
+              </span>
+              {funnySuggestions.map((sug) => (
+                <button
+                  key={sug}
+                  type="button"
+                  onClick={() => setName(sug)}
+                  className="text-[11px] px-2.5 py-0.5 rounded-full bg-zinc-800/90 hover:bg-[#2563EB]/25 text-zinc-300 hover:text-white border border-zinc-700 hover:border-[#3B82F6] transition-colors"
+                >
+                  {sug}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setFunnySuggestions(generateFunnyNameSuggestions(3))
+                }
+                className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+                title="More funny name ideas"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
 
