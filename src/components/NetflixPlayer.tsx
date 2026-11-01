@@ -459,7 +459,7 @@ export default function NetflixPlayer({
   );
 
   // Create Watch Together Room
-  const handleCreateRoom = async (initialMode: WatchTogetherMode = "MARIO_KART") => {
+  const handleCreateRoom = async (initialMode: WatchTogetherMode = "PACE_SYNC") => {
     setCreatingRoom(true);
     try {
       const res = await fetch("/api/rooms", {
@@ -499,7 +499,7 @@ export default function NetflixPlayer({
     }
   };
 
-  // Switch Watch Together Room Mode ("ALL_PAUSE" vs "MARIO_KART")
+  // Switch Watch Together Room Mode ("ALL_PAUSE" vs "PACE_SYNC")
   const handleSetRoomMode = async (newMode: WatchTogetherMode) => {
     if (!roomId) return;
     const res = await fetch("/api/rooms", {
@@ -621,8 +621,8 @@ export default function NetflixPlayer({
               setIsPlaying(true);
             }
           }
-        } else if (updatedRoom.mode === "MARIO_KART") {
-          // Mode 2 (MARIO_KART): Apply rubber-band playback speed (1.25x default, 1.4x catch-up, 1.0x leader slow-down)
+        } else if (updatedRoom.mode === "PACE_SYNC") {
+          // Mode 2 (PACE_SYNC): Apply elastic catch-up playback speed (1.25x default, 1.4x catch-up, 1.0x leader slow-down)
           const me = updatedRoom.participants[participantIdRef.current];
           const targetSpeed = me?.playbackRate || 1.25;
           if (v && Math.abs(v.playbackRate - targetSpeed) > 0.01) {
@@ -807,7 +807,7 @@ export default function NetflixPlayer({
     }
 
     const initialRate =
-      room?.mode === "MARIO_KART"
+      room?.mode === "PACE_SYNC"
         ? room.participants[participantIdRef.current]?.playbackRate || 1.25
         : playbackSpeed;
     v.playbackRate = initialRate;
@@ -1285,7 +1285,7 @@ export default function NetflixPlayer({
         </div>
       </div>
 
-      {/* Watch Together Status Banner (All-Pause or Mario Kart Speed Status) */}
+      {/* Watch Together Status Banner (All-Pause or Pace Sync Speed Status) */}
       {room && (
         <div className="relative z-20 mx-auto px-4 pointer-events-none">
           {room.mode === "ALL_PAUSE" &&
@@ -1300,11 +1300,11 @@ export default function NetflixPlayer({
               </div>
             )}
 
-          {room.mode === "MARIO_KART" && myParticipant && (
+          {room.mode === "PACE_SYNC" && myParticipant && (
             <div className="bg-black/80 border border-zinc-700/80 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-xl flex items-center gap-3">
               <span className="text-amber-400 flex items-center gap-1">
                 <Flag className="w-3.5 h-3.5" />
-                {formatOrdinal(myParticipant.rank)} Place
+                {formatOrdinal(myParticipant.rank)} Position
               </span>
               <span className="text-zinc-600">•</span>
               {myParticipant.playbackRate > 1.3 ? (
@@ -1314,12 +1314,12 @@ export default function NetflixPlayer({
                 </span>
               ) : myParticipant.playbackRate < 1.1 ? (
                 <span className="text-sky-400 flex items-center gap-1">
-                  1.0x Leader Slowdown (Waiting for pack)
+                  1.0x Leader Slowdown (Waiting for group)
                 </span>
               ) : (
                 <span className="text-emerald-400 flex items-center gap-1">
                   <Zap className="w-3.5 h-3.5 fill-emerald-400" />
-                  1.25x Mario Kart Cruise
+                  1.25x Pace Sync Cruise
                 </span>
               )}
             </div>
@@ -1410,19 +1410,19 @@ export default function NetflixPlayer({
             <div className="space-y-4">
               <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
                 Start a Watch Together room and share the invite URL with
-                friends. Choose between synchronized pause mode or Mario Kart
-                catch-up speed mode with a live avatar minimap!
+                friends. Choose between synchronized pause mode or elastic
+                Pace Sync catch-up mode with a live avatar minimap!
               </p>
 
               <div className="grid grid-cols-1 gap-2.5">
                 <button
-                  onClick={() => handleCreateRoom("MARIO_KART")}
+                  onClick={() => handleCreateRoom("PACE_SYNC")}
                   disabled={creatingRoom}
                   className="w-full p-3 rounded-lg bg-[#E50914] hover:bg-[#f6121d] text-white text-left transition-colors"
                 >
                   <div className="font-bold text-sm flex items-center gap-2">
                     <Flame className="w-4 h-4 fill-white" />
-                    <span>Start Mario Kart Speed Room (1.25x / 1.4x / 1.0x)</span>
+                    <span>Start Pace Sync Room (1.25x / 1.4x / 1.0x)</span>
                   </div>
                   <p className="text-xs text-white/85 mt-0.5">
                     Default 1.25x • Slow users boost to 1.4x • Fastest slows to
@@ -1510,16 +1510,16 @@ export default function NetflixPlayer({
                   </button>
 
                   <button
-                    onClick={() => handleSetRoomMode("MARIO_KART")}
+                    onClick={() => handleSetRoomMode("PACE_SYNC")}
                     className={`p-2.5 rounded-lg border text-left transition-colors ${
-                      room.mode === "MARIO_KART"
+                      room.mode === "PACE_SYNC"
                         ? "bg-zinc-800 border-[#E50914] text-white"
                         : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white"
                     }`}
                   >
                     <div className="text-xs font-bold flex items-center gap-1.5">
                       <Flame className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Mario Kart Speed</span>
+                      <span>Pace Sync (Catch-Up)</span>
                     </div>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">
                       1.25x default • 1.4x catch-up • 1.0x leader
@@ -1531,8 +1531,8 @@ export default function NetflixPlayer({
               {/* Active Viewers in Room */}
               <div>
                 <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-                  <span>Racers / Viewers ({roomParticipants.length})</span>
-                  {room.mode === "MARIO_KART" && (
+                  <span>Active Viewers ({roomParticipants.length})</span>
+                  {room.mode === "PACE_SYNC" && (
                     <button
                       onClick={() => seekBy(-15)}
                       className="text-[11px] text-amber-400 hover:underline font-normal normal-case"
@@ -1585,7 +1585,7 @@ export default function NetflixPlayer({
                                 : p.playbackRate > 1.3
                                 ? "bg-red-950 text-red-300 border border-red-700/50"
                                 : p.playbackRate < 1.1 &&
-                                  room.mode === "MARIO_KART"
+                                  room.mode === "PACE_SYNC"
                                 ? "bg-sky-950 text-sky-300 border border-sky-700/50"
                                 : "bg-emerald-950 text-emerald-300"
                             }`}
@@ -1799,13 +1799,13 @@ export default function NetflixPlayer({
         </div>
       )}
 
-      {/* Bottom Controls Bar + Mario Kart Minimap */}
+      {/* Bottom Controls Bar + Watch Together Minimap */}
       <div
         className={`relative z-20 px-6 md:px-10 pb-6 pt-12 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-300 ${
           showControls ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
-        {/* MARIO KART AVATAR PROGRESS MINIMAP (Visible when in a Watch Together Room) */}
+        {/* WATCH TOGETHER AVATAR PROGRESS MINIMAP (Visible when in a Watch Together Room) */}
         {room && (
           <div className="mb-5 bg-zinc-900/90 border border-zinc-700/80 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-md">
             <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-3">
@@ -1813,8 +1813,8 @@ export default function NetflixPlayer({
                 <Flag className="w-3.5 h-3.5 text-[#E50914]" />
                 <span className="text-zinc-200">
                   Watch Together Minimap •{" "}
-                  {room.mode === "MARIO_KART"
-                    ? "Mario Kart Catch-Up (1.25x / 1.4x / 1.0x)"
+                  {room.mode === "PACE_SYNC"
+                    ? "Pace Sync Catch-Up (1.25x / 1.4x / 1.0x)"
                     : "All-Pause Sync"}
                 </span>
               </div>
@@ -1829,17 +1829,17 @@ export default function NetflixPlayer({
               </div>
             </div>
 
-            {/* Race Track Bar */}
+            {/* Minimap Track Bar */}
             <div className="relative h-8 bg-zinc-950 border border-zinc-800 rounded-full flex items-center px-3 overflow-visible">
-              {/* Dashed center road line */}
+              {/* Dashed center track line */}
               <div className="w-full border-t-2 border-dashed border-zinc-700/70" />
 
-              {/* Finish Line Checkered Flag on the right */}
+              {/* Finish Line Flag on the right */}
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-zinc-500">
                 <Flag className="w-4 h-4 text-white" />
               </div>
 
-              {/* Participant Avatar Karts along the track */}
+              {/* Participant Avatars along the track */}
               {roomParticipants.map((p) => {
                 const dur = duration || knownDuration || 600;
                 const pct = Math.min(
@@ -1867,7 +1867,7 @@ export default function NetflixPlayer({
                         className={
                           p.playbackRate > 1.3
                             ? "text-[#E50914]"
-                            : p.playbackRate < 1.1 && room.mode === "MARIO_KART"
+                            : p.playbackRate < 1.1 && room.mode === "PACE_SYNC"
                             ? "text-sky-400"
                             : "text-emerald-400"
                         }
@@ -1880,7 +1880,7 @@ export default function NetflixPlayer({
                       </span>
                     </div>
 
-                    {/* Profile Avatar Kart Token */}
+                    {/* Profile Avatar Token */}
                     <div
                       className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform ${
                         isMe

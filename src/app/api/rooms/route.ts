@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     const initialMode: WatchTogetherMode =
-      mode === "MARIO_KART" ? "MARIO_KART" : "ALL_PAUSE";
+      mode === "PACE_SYNC" ? "PACE_SYNC" : "ALL_PAUSE";
 
     const newRoom: WatchRoom = {
       id: code,
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         durationSeconds: Number(participant.durationSeconds) || 600,
         isPaused: Boolean(participant.isPaused),
         isBuffering: Boolean(participant.isBuffering),
-        playbackRate: initialMode === "MARIO_KART" ? 1.25 : 1.0,
+        playbackRate: initialMode === "PACE_SYNC" ? 1.25 : 1.0,
         rank: 1,
         updatedAt: Date.now(),
       };
@@ -146,10 +146,10 @@ export async function POST(req: NextRequest) {
   }
 
   // 4. Handle Room Mode Switch
-  if (action === "setMode" && (mode === "ALL_PAUSE" || mode === "MARIO_KART")) {
+  if (action === "setMode" && (mode === "ALL_PAUSE" || mode === "PACE_SYNC")) {
     room.mode = mode;
-    if (mode === "MARIO_KART") {
-      // In Mario Kart mode, unpause shared lock so everyone races with rubber-band speeds
+    if (mode === "PACE_SYNC") {
+      // In Pace Sync mode, unpause shared lock so everyone plays with elastic catch-up speeds
       room.isPlaying = true;
       room.pausedByProfileName = null;
     }

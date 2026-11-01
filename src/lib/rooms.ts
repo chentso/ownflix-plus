@@ -1,4 +1,4 @@
-export type WatchTogetherMode = "ALL_PAUSE" | "MARIO_KART";
+export type WatchTogetherMode = "ALL_PAUSE" | "PACE_SYNC";
 
 export interface RoomParticipant {
   participantId: string;
@@ -64,7 +64,7 @@ export function recomputeRoomState(room: WatchRoom): WatchRoom {
     return room;
   }
 
-  // Sort by positionSeconds descending to assign Mario Kart ranks (1st, 2nd, 3rd...)
+  // Sort by positionSeconds descending to assign viewer ranks (1st, 2nd, 3rd...)
   const sorted = [...list].sort(
     (a, b) => b.positionSeconds - a.positionSeconds
   );
@@ -77,14 +77,14 @@ export function recomputeRoomState(room: WatchRoom): WatchRoom {
   room.bufferingProfileName = bufferingUser ? bufferingUser.profileName : null;
 
   // Compute target playbackRate for each participant
-  if (room.mode === "MARIO_KART") {
+  if (room.mode === "PACE_SYNC") {
     const activePlayable = list.filter((p) => !p.isPaused && !p.isBuffering);
     if (activePlayable.length >= 2) {
       const maxPos = Math.max(...activePlayable.map((p) => p.positionSeconds));
       const minPos = Math.min(...activePlayable.map((p) => p.positionSeconds));
       const spread = maxPos - minPos;
 
-      // If spread > 2.0 seconds, engage Mario Kart rubber-banding:
+      // If spread > 2.0 seconds, engage elastic pace-matching:
       // Leader slows down to 1.0x, trailing users boost to 1.4x
       if (spread > 2.0) {
         for (const p of list) {
