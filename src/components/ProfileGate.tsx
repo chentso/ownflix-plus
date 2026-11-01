@@ -342,7 +342,7 @@ export default function ProfileGate({
                 <div className="text-white/95 drop-shadow">
                   {renderProfileIcon(
                     profile.avatarIcon,
-                    "w-14 h-14 md:w-16 md:h-16"
+                    "w-16 h-16 md:w-20 md:h-20"
                   )}
                 </div>
 
@@ -552,7 +552,7 @@ export default function ProfileGate({
                 background: `linear-gradient(145deg, ${unlockingProfile.avatarColor}, #111111 150%)`,
               }}
             >
-              {renderProfileIcon(unlockingProfile.avatarIcon, "w-10 h-10")}
+              {renderProfileIcon(unlockingProfile.avatarIcon, "w-14 h-14")}
               <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#2563EB] border-2 border-[#181818] flex items-center justify-center">
                 <Lock className="w-3.5 h-3.5 text-white" />
               </span>
@@ -647,7 +647,7 @@ export default function ProfileGate({
                   background: `linear-gradient(145deg, ${avatarColor}, #111111 150%)`,
                 }}
               >
-                {renderProfileIcon(avatarIcon, "w-10 h-10")}
+                {renderProfileIcon(avatarIcon, "w-14 h-14")}
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1.5">

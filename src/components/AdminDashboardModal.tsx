@@ -1028,7 +1028,7 @@ export default function AdminDashboardModal({
                       >
                         <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
                         <div className="text-white drop-shadow">
-                          {renderProfileIcon(p.avatarIcon, "w-8 h-8")}
+                          {renderProfileIcon(p.avatarIcon, "w-10 h-10")}
                         </div>
                         {p.isKids && (
                           <span className="absolute bottom-1 right-1 bg-amber-400 text-black font-black text-[9px] px-1 py-0.2 rounded uppercase">
@@ -2336,7 +2336,7 @@ export default function AdminDashboardModal({
                 >
                   <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
                   <div className="text-white drop-shadow">
-                    {renderProfileIcon(newProfileIcon, "w-10 h-10")}
+                    {renderProfileIcon(newProfileIcon, "w-14 h-14")}
                   </div>
                   {newProfileIsKids && (
                     <span className="absolute bottom-1 right-1 bg-amber-400 text-black font-black text-[9px] px-1 py-0.2 rounded uppercase">
@@ -2603,7 +2603,7 @@ export default function AdminDashboardModal({
                 >
                   <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
                   <div className="text-white drop-shadow">
-                    {renderProfileIcon(editProfileIcon, "w-10 h-10")}
+                    {renderProfileIcon(editProfileIcon, "w-14 h-14")}
                   </div>
                   {editProfileIsKids && (
                     <span className="absolute bottom-1 right-1 bg-amber-400 text-black font-black text-[9px] px-1 py-0.2 rounded uppercase">

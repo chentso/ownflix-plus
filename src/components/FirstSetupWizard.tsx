@@ -166,7 +166,7 @@ export default function FirstSetupWizard({
                 >
                   <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
                   <div className="text-white drop-shadow-md">
-                    {renderProfileIcon(avatarIcon, "w-12 h-12")}
+                    {renderProfileIcon(avatarIcon, "w-14 h-14")}
                   </div>
                   <span className="absolute bottom-1 right-1 bg-[#2563EB] text-white font-black text-[9px] px-1.5 py-0.5 rounded tracking-wider uppercase">
                     ADMIN

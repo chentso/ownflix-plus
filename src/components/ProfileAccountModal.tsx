@@ -184,7 +184,7 @@ export default function ProfileAccountModal({
               background: `linear-gradient(145deg, ${avatarColor}, #111111 150%)`,
             }}
           >
-            {renderProfileIcon(avatarIcon, "w-9 h-9")}
+            {renderProfileIcon(avatarIcon, "w-12 h-12")}
             {profile.hasPassword && (
               <span className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-emerald-600 border-2 border-[#181818] flex items-center justify-center">
                 <Lock className="w-3 h-3 text-white" />

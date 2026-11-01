@@ -104,7 +104,7 @@ export default function AvatarPicker({
       </div>
 
       {/* Avatar Items Scrollable Grid */}
-      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 p-2 bg-zinc-950/70 border border-zinc-800 rounded-lg max-h-52 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 select-none">
+      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 p-2 bg-zinc-950/70 border border-zinc-800 rounded-lg max-h-64 sm:max-h-72 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 select-none">
         {filteredItems.length === 0 ? (
           <div className="col-span-full py-8 text-center text-xs text-zinc-500">
             No avatars matching &ldquo;{searchQuery}&rdquo;
@@ -128,9 +128,11 @@ export default function AvatarPicker({
                 }`}
               >
                 {item.type === "emblem" ? (
-                  <item.Icon className="w-5 h-5" strokeWidth={1.8} />
+                  <item.Icon className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.8} />
                 ) : (
-                  <span className="text-xl leading-none">{item.emoji}</span>
+                  <span className="text-2xl sm:text-3xl leading-none select-none">
+                    {item.emoji}
+                  </span>
                 )}
                 {isSelected && (
                   <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#3B82F6] ring-1 ring-[#181818]" />

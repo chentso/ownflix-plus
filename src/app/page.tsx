@@ -1117,7 +1117,7 @@ export default function OwnFlixApp() {
                 background: `linear-gradient(145deg, ${pendingSwitchProfile.avatarColor}, #111111 150%)`,
               }}
             >
-              {renderProfileIcon(pendingSwitchProfile.avatarIcon, "w-10 h-10")}
+              {renderProfileIcon(pendingSwitchProfile.avatarIcon, "w-14 h-14")}
               <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#2563EB] border-2 border-[#181818] flex items-center justify-center">
                 <Lock className="w-3.5 h-3.5 text-white" />
               </span>
