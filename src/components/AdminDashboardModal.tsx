@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { MediaItem, LibraryFolder, ActivityLogItem } from "@/types/ownflix";
-import { renderProfileIcon } from "@/components/ProfileGate";
+import { renderProfileIcon, AVATAR_COLORS } from "@/components/ProfileGate";
+import AvatarPicker from "@/components/AvatarPicker";
+import {
+  generateFunnyName,
+  generateFunnyNameSuggestions,
+} from "@/lib/nameGenerator";
 import {
   X,
   HardDrive,
@@ -25,9 +30,21 @@ import {
   LogIn,
   Check,
   FolderOpen,
+  UserPlus,
+  Lock,
+  Unlock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Dices,
+  Smile,
+  Palette,
+  AlertCircle,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 
-export type AdminTab = "activity" | "folders" | "media";
+export type AdminTab = "profiles" | "activity" | "folders" | "media";
 
 interface AdminProfileSummary {
   id: string;
@@ -75,6 +92,7 @@ interface AdminDashboardModalProps {
   media: MediaItem[];
   onClose: () => void;
   onLibraryUpdated: () => Promise<void>;
+  onProfilesUpdated?: () => Promise<void>;
   standalone?: boolean;
 }
 
@@ -104,11 +122,12 @@ function formatRelativeTime(iso: string): string {
 }
 
 export default function AdminDashboardModal({
-  initialTab = "activity",
+  initialTab = "profiles",
   initialEditItem = null,
   media,
   onClose,
   onLibraryUpdated,
+  onProfilesUpdated,
   standalone = false,
 }: AdminDashboardModalProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>(
@@ -126,6 +145,54 @@ export default function AdminDashboardModal({
   const [adminProfiles, setAdminProfiles] = useState<AdminProfileSummary[]>([]);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
+
+  // Profile Administration State
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [newProfileFunnySuggestions, setNewProfileFunnySuggestions] = useState<
+    string[]
+  >(() => generateFunnyNameSuggestions(3));
+  const [newProfileColor, setNewProfileColor] = useState<string>(
+    AVATAR_COLORS[0]
+  );
+  const [newProfileIcon, setNewProfileIcon] = useState<string>("smile");
+  const [newProfileIsAdmin, setNewProfileIsAdmin] = useState(false);
+  const [newProfileIsKids, setNewProfileIsKids] = useState(false);
+  const [newProfilePassword, setNewProfilePassword] = useState("");
+  const [newProfileShowPassword, setNewProfileShowPassword] = useState(false);
+  const [showNewAvatarPicker, setShowNewAvatarPicker] = useState(false);
+  const [createProfileError, setCreateProfileError] = useState<string | null>(
+    null
+  );
+  const [creatingProfile, setCreatingProfile] = useState(false);
+
+  // Edit Profile State
+  const [editingProfileItem, setEditingProfileItem] =
+    useState<AdminProfileSummary | null>(null);
+  const [editProfileName, setEditProfileName] = useState("");
+  const [editProfileFunnySuggestions, setEditProfileFunnySuggestions] =
+    useState<string[]>([]);
+  const [editProfileColor, setEditProfileColor] = useState<string>(
+    AVATAR_COLORS[0]
+  );
+  const [editProfileIcon, setEditProfileIcon] = useState<string>("smile");
+  const [editProfileIsAdmin, setEditProfileIsAdmin] = useState(false);
+  const [editProfileIsKids, setEditProfileIsKids] = useState(false);
+  const [editProfileNewPassword, setEditProfileNewPassword] = useState("");
+  const [editProfileRemovePassword, setEditProfileRemovePassword] =
+    useState(false);
+  const [editProfileShowPassword, setEditProfileShowPassword] = useState(false);
+  const [showEditAvatarPicker, setShowEditAvatarPicker] = useState(false);
+  const [editProfileError, setEditProfileError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Delete Profile State
+  const [deletingProfileItem, setDeletingProfileItem] =
+    useState<AdminProfileSummary | null>(null);
+  const [deletingProfile, setDeletingProfile] = useState(false);
+  const [deleteProfileError, setDeleteProfileError] = useState<string | null>(
+    null
+  );
 
   // Activity Log Filters
   const [selectedProfileFilter, setSelectedProfileFilter] =
@@ -410,6 +477,135 @@ export default function AdminDashboardModal({
     await fetch(`/api/library?id=${id}`, { method: "DELETE" });
     await fetchAdminData();
     await onLibraryUpdated();
+  };
+
+  const openCreateProfileModal = () => {
+    setNewProfileName("");
+    setNewProfileFunnySuggestions(generateFunnyNameSuggestions(3));
+    setNewProfileColor(
+      AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
+    );
+    setNewProfileIcon("smile");
+    setNewProfileIsAdmin(false);
+    setNewProfileIsKids(false);
+    setNewProfilePassword("");
+    setNewProfileShowPassword(false);
+    setShowNewAvatarPicker(false);
+    setCreateProfileError(null);
+    setIsCreatingProfile(true);
+  };
+
+  const openEditProfileModal = (p: AdminProfileSummary) => {
+    setEditingProfileItem(p);
+    setEditProfileName(p.name);
+    setEditProfileFunnySuggestions(generateFunnyNameSuggestions(3));
+    setEditProfileColor(p.avatarColor);
+    setEditProfileIcon(p.avatarIcon);
+    setEditProfileIsAdmin(p.isAdmin);
+    setEditProfileIsKids(p.isKids);
+    setEditProfileNewPassword("");
+    setEditProfileRemovePassword(false);
+    setEditProfileShowPassword(false);
+    setShowEditAvatarPicker(false);
+    setEditProfileError(null);
+  };
+
+  const handleCreateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProfileName.trim()) return;
+    setCreatingProfile(true);
+    setCreateProfileError(null);
+    try {
+      const res = await fetch("/api/admin/profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newProfileName.trim(),
+          avatarColor: newProfileColor,
+          avatarIcon: newProfileIcon,
+          isAdmin: newProfileIsAdmin,
+          isKids: newProfileIsKids,
+          password: newProfilePassword.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateProfileError(data.error || "Failed to create profile.");
+        return;
+      }
+      setIsCreatingProfile(false);
+      setStatusBanner(`Profile "${newProfileName}" created successfully!`);
+      await fetchAdminData();
+      await onProfilesUpdated?.();
+    } catch (err: any) {
+      setCreateProfileError(err?.message || "Error creating profile.");
+    } finally {
+      setCreatingProfile(false);
+    }
+  };
+
+  const handleSaveEditProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProfileItem || !editProfileName.trim()) return;
+    setSavingProfile(true);
+    setEditProfileError(null);
+    try {
+      const res = await fetch("/api/admin/profiles", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingProfileItem.id,
+          name: editProfileName.trim(),
+          avatarColor: editProfileColor,
+          avatarIcon: editProfileIcon,
+          isAdmin: editProfileIsAdmin,
+          isKids: editProfileIsKids,
+          newPassword: editProfileNewPassword.trim() || undefined,
+          removePassword: editProfileRemovePassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditProfileError(data.error || "Failed to update profile.");
+        return;
+      }
+      setEditingProfileItem(null);
+      setStatusBanner(`Profile "${editProfileName}" updated successfully!`);
+      await fetchAdminData();
+      await onProfilesUpdated?.();
+    } catch (err: any) {
+      setEditProfileError(err?.message || "Error updating profile.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleDeleteProfile = async () => {
+    if (!deletingProfileItem) return;
+    setDeletingProfile(true);
+    setDeleteProfileError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/profiles?id=${encodeURIComponent(deletingProfileItem.id)}`,
+        {
+          method: "DELETE",
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setDeleteProfileError(data.error || "Failed to delete profile.");
+        return;
+      }
+      const deletedName = deletingProfileItem.name;
+      setDeletingProfileItem(null);
+      setStatusBanner(`Profile "${deletedName}" has been permanently deleted.`);
+      await fetchAdminData();
+      await onProfilesUpdated?.();
+    } catch (err: any) {
+      setDeleteProfileError(err?.message || "Error deleting profile.");
+    } finally {
+      setDeletingProfile(false);
+    }
   };
 
   const startCreateMedia = () => {
@@ -706,6 +902,22 @@ export default function AdminDashboardModal({
       <div className="px-6 bg-[#141414] border-b border-zinc-800 flex items-center gap-6 overflow-x-auto">
         <button
           onClick={() => {
+            setActiveTab("profiles");
+            setEditingItem(null);
+            setIsCreatingMedia(false);
+          }}
+          className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 shrink-0 transition-colors ${
+            activeTab === "profiles"
+              ? "border-[#2563EB] text-white"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <Users className="w-4 h-4 text-[#3B82F6]" />
+          <span>Server Profiles ({adminProfiles.length})</span>
+        </button>
+
+        <button
+          onClick={() => {
             setActiveTab("activity");
             setEditingItem(null);
             setIsCreatingMedia(false);
@@ -767,7 +979,186 @@ export default function AdminDashboardModal({
 
       {/* Main Content Area */}
       <div className="p-6 overflow-y-auto flex-1 space-y-6">
-        {activeTab === "activity" ? (
+        {activeTab === "profiles" ? (
+          /* ==========================================
+             TAB 0: SERVER PROFILES & ACCESS MANAGEMENT
+             ========================================== */
+          <div className="space-y-6">
+            {/* Top Explanation & Create Profile Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#141414] border border-zinc-800 rounded-lg p-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#3B82F6]" />
+                  <h3 className="font-bold text-base md:text-lg text-white">
+                    Server Profiles &amp; Access Control
+                  </h3>
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-2xl leading-relaxed">
+                  Manage viewer accounts on this server, assign Administrator
+                  roles, enable Kids Mode restrictions, and reset forgotten
+                  passwords without needing current credentials.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={openCreateProfileModal}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-bold text-sm rounded-lg shadow-lg shadow-blue-600/20 transition-all shrink-0"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Create Profile</span>
+              </button>
+            </div>
+
+            {/* Profiles Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {adminProfiles.map((p) => (
+                <div
+                  key={p.id}
+                  className="bg-[#141414] border border-zinc-800 hover:border-zinc-700/80 rounded-xl p-5 flex flex-col justify-between transition-all group"
+                >
+                  <div>
+                    {/* Top Avatar & Badges */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <div
+                        className="relative w-16 h-16 rounded-xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden ring-1 ring-white/10"
+                        style={{
+                          background: `linear-gradient(145deg, ${p.avatarColor}, #0a0a0a 160%)`,
+                        }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
+                        <div className="text-white drop-shadow">
+                          {renderProfileIcon(p.avatarIcon, "w-8 h-8")}
+                        </div>
+                        {p.isKids && (
+                          <span className="absolute bottom-1 right-1 bg-amber-400 text-black font-black text-[9px] px-1 py-0.2 rounded uppercase">
+                            KIDS
+                          </span>
+                        )}
+                        {p.isAdmin && (
+                          <span className="absolute bottom-1 right-1 bg-[#2563EB] text-white font-black text-[9px] px-1 py-0.2 rounded uppercase">
+                            ADMIN
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-base text-white truncate group-hover:text-[#60A5FA] transition-colors">
+                          {p.name}
+                        </h4>
+
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                          {p.isAdmin ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/60">
+                              <ShieldCheck className="w-3 h-3 text-[#3B82F6]" />
+                              <span>Administrator</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
+                              <Users className="w-3 h-3 text-zinc-400" />
+                              <span>Standard</span>
+                            </span>
+                          )}
+
+                          {p.hasPassword ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-950/70 text-emerald-300 border border-emerald-800/60">
+                              <Lock className="w-3 h-3 text-emerald-400" />
+                              <span>Protected</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700">
+                              <Unlock className="w-3 h-3 text-zinc-500" />
+                              <span>No Pass</span>
+                            </span>
+                          )}
+
+                          {p.isKids && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/70 text-amber-300 border border-amber-800/60">
+                              <span>Kids Mode</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 gap-2 p-3 bg-zinc-900/60 rounded-lg border border-zinc-800/80 text-xs mb-4">
+                      <div>
+                        <span className="text-zinc-500 block text-[11px]">
+                          Watched
+                        </span>
+                        <span className="font-bold text-white">
+                          {p.counts.watchProgress} titles
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[11px]">
+                          My List
+                        </span>
+                        <span className="font-bold text-white">
+                          {p.counts.myList} saved
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[11px]">
+                          Folders
+                        </span>
+                        <span className="font-bold text-white">
+                          {p.counts.libraryFolders} assigned
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[11px]">
+                          Activity
+                        </span>
+                        <span className="font-bold text-white">
+                          {p.counts.activityLogs} logs
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions footer */}
+                  <div className="flex items-center justify-between border-t border-zinc-800 pt-3">
+                    <span className="text-[11px] text-zinc-500">
+                      Added {new Date(p.createdAt).toLocaleDateString()}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditProfileModal(p)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border border-zinc-700 transition-colors"
+                        title="Edit profile & reset password"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-[#3B82F6]" />
+                        <span>Edit</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeletingProfileItem(p);
+                          setDeleteProfileError(null);
+                        }}
+                        disabled={adminProfiles.length <= 1}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-zinc-800/80 hover:bg-red-950/80 hover:text-red-200 text-zinc-400 hover:border-red-800/80 border border-zinc-700/80 text-xs transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                        title={
+                          adminProfiles.length <= 1
+                            ? "Cannot delete the last remaining profile"
+                            : "Delete profile"
+                        }
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : activeTab === "activity" ? (
           /* ==========================================
              PRIMARY DASHBOARD: USER PROFILE ACTIVITY LOGS
              ========================================== */
@@ -1902,10 +2293,640 @@ export default function AdminDashboardModal({
     </div>
   );
 
+  const profileModals = (
+    <>
+      {/* 1. Create Profile Modal */}
+      {isCreatingProfile && (
+        <div
+          onClick={() => setIsCreatingProfile(false)}
+          className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 select-none overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#18181b] border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 my-auto max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-[#3B82F6]" />
+                <h3 className="font-bold text-lg text-white">Create New Profile</h3>
+              </div>
+              <button
+                onClick={() => setIsCreatingProfile(false)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {createProfileError && (
+              <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 text-xs rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{createProfileError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateProfile} className="space-y-4">
+              {/* Avatar Preview & Customization */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-zinc-900/80 rounded-xl border border-zinc-800">
+                <div
+                  className="relative w-20 h-20 rounded-xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden ring-2 ring-white/10"
+                  style={{
+                    background: `linear-gradient(145deg, ${newProfileColor}, #0a0a0a 160%)`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
+                  <div className="text-white drop-shadow">
+                    {renderProfileIcon(newProfileIcon, "w-10 h-10")}
+                  </div>
+                  {newProfileIsKids && (
+                    <span className="absolute bottom-1 right-1 bg-amber-400 text-black font-black text-[9px] px-1 py-0.2 rounded uppercase">
+                      KIDS
+                    </span>
+                  )}
+                  {newProfileIsAdmin && (
+                    <span className="absolute bottom-1 right-1 bg-[#2563EB] text-white font-black text-[9px] px-1 py-0.2 rounded uppercase">
+                      ADMIN
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 w-full space-y-2.5">
+                  <div>
+                    <label className="text-xs font-semibold text-zinc-300 mb-1 flex items-center gap-1.5">
+                      <Palette className="w-3.5 h-3.5 text-[#3B82F6]" />
+                      <span>Avatar Color</span>
+                    </label>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {AVATAR_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setNewProfileColor(c)}
+                          className={`w-6 h-6 rounded-full transition-transform ${
+                            newProfileColor === c
+                              ? "ring-2 ring-white scale-110"
+                              : "opacity-75 hover:opacity-100"
+                          }`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowNewAvatarPicker((v) => !v)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 rounded border border-zinc-700 transition-colors"
+                  >
+                    <Smile className="w-3.5 h-3.5 text-[#3B82F6]" />
+                    <span>
+                      {showNewAvatarPicker ? "Hide Picker" : "Emblem / Emoji"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {showNewAvatarPicker && (
+                <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-xl max-h-56 overflow-y-auto">
+                  <AvatarPicker
+                    selectedId={newProfileIcon}
+                    onSelect={(id) => {
+                      setNewProfileIcon(id);
+                      setShowNewAvatarPicker(false);
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Profile Name & Funny Name Generator */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-zinc-300">
+                    Profile Name
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewProfileName(generateFunnyName());
+                      setNewProfileFunnySuggestions(
+                        generateFunnyNameSuggestions(3)
+                      );
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-[#3B82F6] hover:text-blue-300 transition-colors"
+                  >
+                    <Dices className="w-3.5 h-3.5" />
+                    <span>Funny Name</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={newProfileName}
+                    onChange={(e) => setNewProfileName(e.target.value)}
+                    placeholder="Enter profile name"
+                    required
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded-lg text-white text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewProfileName(generateFunnyName());
+                      setNewProfileFunnySuggestions(
+                        generateFunnyNameSuggestions(3)
+                      );
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#3B82F6] p-1 rounded"
+                  >
+                    <Dices className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[11px] text-zinc-500 font-medium mr-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-[#3B82F6]" />
+                    Ideas:
+                  </span>
+                  {newProfileFunnySuggestions.map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => {
+                        setNewProfileName(sug);
+                        setNewProfileFunnySuggestions(
+                          generateFunnyNameSuggestions(3)
+                        );
+                      }}
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-800 hover:bg-[#2563EB]/30 hover:border-[#2563EB]/60 text-zinc-300 hover:text-white border border-zinc-700 transition-all font-medium"
+                    >
+                      {sug}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Roles: Administrator & Kids Mode */}
+              <div className="space-y-2 pt-2 border-t border-zinc-800">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newProfileIsAdmin}
+                    onChange={(e) => {
+                      setNewProfileIsAdmin(e.target.checked);
+                      if (e.target.checked) setNewProfileIsKids(false);
+                    }}
+                    className="mt-0.5 w-4 h-4 accent-[#2563EB] rounded cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#3B82F6]" />
+                      <span>Server Administrator</span>
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      Grants access to Admin Settings, library storage folders, and profile management.
+                    </p>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-2.5 cursor-pointer ${
+                    newProfileIsAdmin ? "opacity-40 pointer-events-none" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={newProfileIsKids}
+                    onChange={(e) => setNewProfileIsKids(e.target.checked)}
+                    disabled={newProfileIsAdmin}
+                    className="mt-0.5 w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-amber-300">
+                      Kids Profile
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      Restricts catalog to child-safe titles rated G, PG, TV-Y, and TV-Y7.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Password Protection */}
+              <div className="pt-2 border-t border-zinc-800">
+                <label className="text-xs font-semibold text-zinc-300 mb-1 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#3B82F6]" />
+                  <span>Profile Password (Optional)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={newProfileShowPassword ? "text" : "password"}
+                    value={newProfilePassword}
+                    onChange={(e) => setNewProfilePassword(e.target.value)}
+                    placeholder="Leave empty for no password"
+                    className="w-full px-3 py-2 pr-10 bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded-lg text-white text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNewProfileShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                  >
+                    {newProfileShowPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingProfile(false)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingProfile || !newProfileName.trim()}
+                  className="px-5 py-2 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {creatingProfile ? "Creating..." : "Create Profile"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Edit Profile Modal */}
+      {editingProfileItem && (
+        <div
+          onClick={() => setEditingProfileItem(null)}
+          className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 select-none overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#18181b] border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 my-auto max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-[#3B82F6]" />
+                <h3 className="font-bold text-lg text-white">
+                  Edit Profile: {editingProfileItem.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingProfileItem(null)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {editProfileError && (
+              <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 text-xs rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{editProfileError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEditProfile} className="space-y-4">
+              {/* Avatar Preview & Customization */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-zinc-900/80 rounded-xl border border-zinc-800">
+                <div
+                  className="relative w-20 h-20 rounded-xl flex items-center justify-center shadow-lg shrink-0 overflow-hidden ring-2 ring-white/10"
+                  style={{
+                    background: `linear-gradient(145deg, ${editProfileColor}, #0a0a0a 160%)`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
+                  <div className="text-white drop-shadow">
+                    {renderProfileIcon(editProfileIcon, "w-10 h-10")}
+                  </div>
+                  {editProfileIsKids && (
+                    <span className="absolute bottom-1 right-1 bg-amber-400 text-black font-black text-[9px] px-1 py-0.2 rounded uppercase">
+                      KIDS
+                    </span>
+                  )}
+                  {editProfileIsAdmin && (
+                    <span className="absolute bottom-1 right-1 bg-[#2563EB] text-white font-black text-[9px] px-1 py-0.2 rounded uppercase">
+                      ADMIN
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 w-full space-y-2.5">
+                  <div>
+                    <label className="text-xs font-semibold text-zinc-300 mb-1 flex items-center gap-1.5">
+                      <Palette className="w-3.5 h-3.5 text-[#3B82F6]" />
+                      <span>Avatar Color</span>
+                    </label>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {AVATAR_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setEditProfileColor(c)}
+                          className={`w-6 h-6 rounded-full transition-transform ${
+                            editProfileColor === c
+                              ? "ring-2 ring-white scale-110"
+                              : "opacity-75 hover:opacity-100"
+                          }`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowEditAvatarPicker((v) => !v)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 rounded border border-zinc-700 transition-colors"
+                  >
+                    <Smile className="w-3.5 h-3.5 text-[#3B82F6]" />
+                    <span>
+                      {showEditAvatarPicker ? "Hide Picker" : "Emblem / Emoji"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {showEditAvatarPicker && (
+                <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-xl max-h-56 overflow-y-auto">
+                  <AvatarPicker
+                    selectedId={editProfileIcon}
+                    onSelect={(id) => {
+                      setEditProfileIcon(id);
+                      setShowEditAvatarPicker(false);
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Profile Name & Funny Generator */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-zinc-300">
+                    Profile Name
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditProfileName(generateFunnyName());
+                      setEditProfileFunnySuggestions(
+                        generateFunnyNameSuggestions(3)
+                      );
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-[#3B82F6] hover:text-blue-300 transition-colors"
+                  >
+                    <Dices className="w-3.5 h-3.5" />
+                    <span>Funny Name</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editProfileName}
+                    onChange={(e) => setEditProfileName(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded-lg text-white text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditProfileName(generateFunnyName());
+                      setEditProfileFunnySuggestions(
+                        generateFunnyNameSuggestions(3)
+                      );
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#3B82F6] p-1 rounded"
+                  >
+                    <Dices className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[11px] text-zinc-500 font-medium mr-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-[#3B82F6]" />
+                    Ideas:
+                  </span>
+                  {editProfileFunnySuggestions.map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => {
+                        setEditProfileName(sug);
+                        setEditProfileFunnySuggestions(
+                          generateFunnyNameSuggestions(3)
+                        );
+                      }}
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-800 hover:bg-[#2563EB]/30 hover:border-[#2563EB]/60 text-zinc-300 hover:text-white border border-zinc-700 transition-all font-medium"
+                    >
+                      {sug}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Roles: Administrator & Kids Mode */}
+              <div className="space-y-2 pt-2 border-t border-zinc-800">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editProfileIsAdmin}
+                    onChange={(e) => {
+                      setEditProfileIsAdmin(e.target.checked);
+                      if (e.target.checked) setEditProfileIsKids(false);
+                    }}
+                    className="mt-0.5 w-4 h-4 accent-[#2563EB] rounded cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#3B82F6]" />
+                      <span>Server Administrator</span>
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      Grants access to Admin Settings, library storage folders, and profile management.
+                    </p>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-2.5 cursor-pointer ${
+                    editProfileIsAdmin ? "opacity-40 pointer-events-none" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editProfileIsKids}
+                    onChange={(e) => setEditProfileIsKids(e.target.checked)}
+                    disabled={editProfileIsAdmin}
+                    className="mt-0.5 w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-amber-300">
+                      Kids Profile
+                    </span>
+                    <p className="text-[11px] text-zinc-400">
+                      Restricts catalog to child-safe titles rated G, PG, TV-Y, and TV-Y7.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Admin Password Management (Reset without old password) */}
+              <div className="pt-2 border-t border-zinc-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-[#3B82F6]" />
+                    <span>Password Management (Admin Override)</span>
+                  </label>
+                  <span className="text-[10px] text-zinc-400 font-mono">
+                    {editingProfileItem.hasPassword
+                      ? "Currently Protected"
+                      : "No Password"}
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={editProfileShowPassword ? "text" : "password"}
+                    value={editProfileNewPassword}
+                    onChange={(e) => setEditProfileNewPassword(e.target.value)}
+                    placeholder={
+                      editingProfileItem.hasPassword
+                        ? "Enter new password to reset"
+                        : "Set new password (optional)"
+                    }
+                    disabled={editProfileRemovePassword}
+                    className="w-full px-3 py-2 pr-10 bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded-lg text-white text-sm outline-none disabled:opacity-40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditProfileShowPassword((v) => !v)}
+                    disabled={editProfileRemovePassword}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white disabled:opacity-30"
+                  >
+                    {editProfileShowPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+
+                {editingProfileItem.hasPassword && (
+                  <label className="flex items-center gap-2 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={editProfileRemovePassword}
+                      onChange={(e) => {
+                        setEditProfileRemovePassword(e.target.checked);
+                        if (e.target.checked) setEditProfileNewPassword("");
+                      }}
+                      className="w-3.5 h-3.5 accent-red-500 rounded"
+                    />
+                    <span className="text-xs text-red-300">
+                      Remove password protection from this profile
+                    </span>
+                  </label>
+                )}
+
+                <p className="text-[10px] text-zinc-500 leading-normal">
+                  As an administrator on localhost, you can reset or clear any
+                  user&apos;s password without entering their current password.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingProfileItem(null)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingProfile || !editProfileName.trim()}
+                  className="px-5 py-2 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold shadow-md shadow-blue-600/30 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {savingProfile ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Delete Profile Confirmation Dialog */}
+      {deletingProfileItem && (
+        <div
+          onClick={() => setDeletingProfileItem(null)}
+          className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 select-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#18181b] border border-red-900/60 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-950 border border-red-800 flex items-center justify-center text-red-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-white">
+                  Delete Profile: {deletingProfileItem.name}?
+                </h3>
+                <span className="text-xs text-zinc-400">
+                  This action is permanent and cannot be undone.
+                </span>
+              </div>
+            </div>
+
+            {deleteProfileError && (
+              <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 text-xs rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{deleteProfileError}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-zinc-300 leading-relaxed bg-zinc-900/80 p-3 rounded-lg border border-zinc-800">
+              Deleting &quot;{deletingProfileItem.name}&quot; will remove all of
+              their watch progress history, My List items, custom playlists, and
+              unassign their private storage folders.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingProfileItem(null)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteProfile}
+                disabled={deletingProfile}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-md shadow-red-700/30 disabled:opacity-50"
+              >
+                {deletingProfile ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   if (standalone) {
     return (
       <div className="min-h-screen bg-[#141414] p-4 sm:p-8 select-none">
         {innerDashboard}
+        {profileModals}
       </div>
     );
   }
@@ -1916,6 +2937,7 @@ export default function AdminDashboardModal({
       className="fixed inset-0 z-50 bg-black/85 overflow-y-auto flex justify-center p-3 sm:p-6 md:p-10 select-none"
     >
       {innerDashboard}
+      {profileModals}
     </div>
   );
 }

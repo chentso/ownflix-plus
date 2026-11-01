@@ -13,6 +13,7 @@ import ProfileAccountModal from "@/components/ProfileAccountModal";
 import IdentifyMetadataModal from "@/components/IdentifyMetadataModal";
 import PlaylistsView from "@/components/PlaylistsView";
 import AddToPlaylistModal from "@/components/AddToPlaylistModal";
+import FirstSetupWizard from "@/components/FirstSetupWizard";
 import {
   HardDrive,
   Play,
@@ -55,9 +56,9 @@ export default function OwnFlixApp() {
 
   const [adminModal, setAdminModal] = useState<{
     open: boolean;
-    tab: "activity" | "folders" | "media";
+    tab: "profiles" | "activity" | "folders" | "media";
     editItem?: MediaItem | null;
-  }>({ open: false, tab: "activity", editItem: null });
+  }>({ open: false, tab: "profiles", editItem: null });
 
   const [accountModalOpen, setAccountModalOpen] = useState(false);
 
@@ -480,6 +481,18 @@ export default function OwnFlixApp() {
     );
   }
 
+  // 0. Prompt for First-Time Setup if server has 0 profiles
+  if (!loading && profiles.length === 0) {
+    return (
+      <FirstSetupWizard
+        onSetupComplete={async (adminProfile) => {
+          await fetchProfiles();
+          handleSelectProfile(adminProfile);
+        }}
+      />
+    );
+  }
+
   // 1. Show "Who's Watching?" Profile Gate if no profile is selected
   if (!activeProfile) {
     return (
@@ -548,7 +561,7 @@ export default function OwnFlixApp() {
         }}
         onManageProfiles={() => handleSelectProfile(null)}
         onOpenAccountSettings={() => setAccountModalOpen(true)}
-        onOpenAdmin={(tab = "activity") =>
+        onOpenAdmin={(tab = "profiles") =>
           setAdminModal({ open: true, tab, editItem: null })
         }
       />
@@ -1033,9 +1046,10 @@ export default function OwnFlixApp() {
           initialEditItem={adminModal.editItem}
           media={media}
           onClose={() =>
-            setAdminModal({ open: false, tab: "activity", editItem: null })
+            setAdminModal({ open: false, tab: "profiles", editItem: null })
           }
           onLibraryUpdated={() => fetchMedia(activeProfile.id)}
+          onProfilesUpdated={fetchProfiles}
         />
       )}
 

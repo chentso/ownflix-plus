@@ -15,49 +15,12 @@ export async function ensureSeeded(): Promise<void> {
 }
 
 async function runSeed(): Promise<void> {
-  const profileCount = await prisma.profile.count();
-  if (profileCount > 0) {
+  const mediaCount = await prisma.mediaItem.count();
+  if (mediaCount > 0) {
     return;
   }
 
-  // 1. Create Netflix-style Profiles
-  const alex = await prisma.profile.create({
-    data: {
-      name: "Alex",
-      avatarColor: "#2563EB",
-      avatarIcon: "crown",
-      isAdmin: true,
-      isKids: false,
-    },
-  });
-
-  await prisma.profile.createMany({
-    data: [
-      {
-        name: "Maya",
-        avatarColor: "#0071EB",
-        avatarIcon: "zap",
-        isAdmin: false,
-        isKids: false,
-      },
-      {
-        name: "Living Room",
-        avatarColor: "#10B981",
-        avatarIcon: "tv",
-        isAdmin: false,
-        isKids: false,
-      },
-      {
-        name: "Kids",
-        avatarColor: "#F59E0B",
-        avatarIcon: "rocket",
-        isAdmin: false,
-        isKids: true,
-      },
-    ],
-  });
-
-  // 2. Seed Built-In Movies & Series (High-speed open streams + Intro/Credits markers)
+  // 1. Seed Built-In Movies & Series (High-speed open streams + Intro/Credits markers)
   const tearsOfSteel = await prisma.mediaItem.create({
     data: {
       title: "Tears of Steel",
@@ -327,37 +290,40 @@ async function runSeed(): Promise<void> {
     console.error("Initial folder scan warning:", err);
   }
 
-  // 5. Seed initial Continue Watching & My List for Alex so the UI looks alive immediately
-  await prisma.watchProgress.createMany({
-    data: [
-      {
-        profileId: alex.id,
-        mediaItemId: sintel.id,
-        positionSeconds: 245,
-        durationSeconds: 888,
-        completed: false,
-      },
-      {
-        profileId: alex.id,
-        mediaItemId: chronicles.id,
-        episodeId: ep1.id,
-        positionSeconds: 6,
-        durationSeconds: 15,
-        completed: false,
-      },
-    ],
-  });
+  // 5. Seed initial Continue Watching & My List if a profile already exists
+  const firstProfile = await prisma.profile.findFirst();
+  if (firstProfile) {
+    await prisma.watchProgress.createMany({
+      data: [
+        {
+          profileId: firstProfile.id,
+          mediaItemId: sintel.id,
+          positionSeconds: 245,
+          durationSeconds: 888,
+          completed: false,
+        },
+        {
+          profileId: firstProfile.id,
+          mediaItemId: chronicles.id,
+          episodeId: ep1.id,
+          positionSeconds: 6,
+          durationSeconds: 15,
+          completed: false,
+        },
+      ],
+    });
 
-  await prisma.myListItem.createMany({
-    data: [
-      {
-        profileId: alex.id,
-        mediaItemId: tearsOfSteel.id,
-      },
-      {
-        profileId: alex.id,
-        mediaItemId: chronicles.id,
-      },
-    ],
-  });
+    await prisma.myListItem.createMany({
+      data: [
+        {
+          profileId: firstProfile.id,
+          mediaItemId: tearsOfSteel.id,
+        },
+        {
+          profileId: firstProfile.id,
+          mediaItemId: chronicles.id,
+        },
+      ],
+    });
+  }
 }

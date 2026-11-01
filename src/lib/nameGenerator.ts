@@ -130,3 +130,6 @@ export function generateFunnyNameSuggestions(count = 3): string[] {
   }
   return Array.from(set);
 }
+
+export const generateFunnyName = generateFunnyProfileName;
+

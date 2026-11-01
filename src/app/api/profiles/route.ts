@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureSeeded } from "@/lib/seed";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { logProfileActivity } from "@/lib/activity";
+import { getClientIp } from "@/lib/localhost";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, avatarColor, avatarIcon, isKids, password } = body;
+  const { name, avatarColor, avatarIcon, isKids, password, isAdmin } = body;
 
   if (!name || !name.trim()) {
     return NextResponse.json(
@@ -46,18 +48,41 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const existingCount = await prisma.profile.count();
+  const isFirstProfile = existingCount === 0;
+
   const trimmedPass = typeof password === "string" ? password.trim() : "";
+
+  // On first setup on the server where a profile is not available, password is required
+  if (isFirstProfile && trimmedPass.length < 3) {
+    return NextResponse.json(
+      {
+        error:
+          "A password (minimum 3 characters) is required to secure the primary administrator profile.",
+      },
+      { status: 400 }
+    );
+  }
 
   const profile = await prisma.profile.create({
     data: {
       name: name.trim(),
       avatarColor: avatarColor || "#2563EB",
-      avatarIcon: avatarIcon || "smile",
+      avatarIcon: avatarIcon || (isFirstProfile ? "crown" : "smile"),
       passwordHash: trimmedPass ? hashPassword(trimmedPass) : null,
-      isKids: Boolean(isKids),
-      isAdmin: false,
+      isKids: isFirstProfile ? false : Boolean(isKids),
+      isAdmin: isFirstProfile ? true : Boolean(isAdmin),
     },
   });
+
+  await logProfileActivity({
+    profileId: profile.id,
+    action: "PROFILE_CREATE",
+    details: isFirstProfile
+      ? `Initial server setup: created primary administrator profile "${profile.name}"`
+      : `Created profile "${profile.name}" (${profile.isAdmin ? "Admin" : "Standard"})`,
+    ipAddress: getClientIp(req),
+  }).catch(() => {});
 
   return NextResponse.json(
     { profile: sanitizeProfile(profile) },
