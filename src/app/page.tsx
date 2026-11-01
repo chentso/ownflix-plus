@@ -839,11 +839,15 @@ export default function OwnFlixApp() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ top: contextMenu.y, left: contextMenu.x }}
-            className="fixed w-64 bg-[#181818]/98 backdrop-blur-md border border-zinc-700/90 rounded-xl shadow-[0_18px_45px_rgba(0,0,0,0.85)] py-1.5 text-sm text-zinc-200 select-none overflow-hidden"
+            style={{
+              top: contextMenu.y,
+              left: contextMenu.x,
+              backgroundColor: "#181818",
+            }}
+            className="fixed w-64 bg-[#181818] border border-zinc-700 rounded-xl shadow-[0_18px_45px_rgba(0,0,0,0.9)] py-1.5 text-sm text-zinc-200 select-none overflow-hidden"
           >
             {/* Context Menu Movie Header */}
-            <div className="px-3.5 py-2 border-b border-zinc-800/90 flex items-center gap-2.5">
+            <div className="px-3.5 py-2 border-b border-zinc-800 bg-[#141414] flex items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={contextMenu.item.posterUrl || contextMenu.item.backdropUrl}

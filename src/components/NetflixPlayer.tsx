@@ -1849,7 +1849,7 @@ export default function NetflixPlayer({
       {/* Compact Modern Buffering Pill & Watch Together Status */}
       {isBuffering && (
         <div className="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30">
-          <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.6)]">
+          <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#141414] border border-zinc-700 shadow-[0_8px_30px_rgba(0,0,0,0.8)]">
             <div className="relative w-3.5 h-3.5 flex items-center justify-center">
               <span className="absolute inset-0 rounded-full border-2 border-[#3B82F6]/25" />
               <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#3B82F6] animate-spin" />
@@ -1866,7 +1866,7 @@ export default function NetflixPlayer({
         room.mode === "ALL_PAUSE" &&
         (!room.isPlaying || room.bufferingProfileName) && (
           <div className="relative z-20 mx-auto px-4 pointer-events-none">
-            <div className="bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-200 text-xs font-medium px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+            <div className="bg-[#141414] border border-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2">
               {room.bufferingProfileName ? (
                 <span className="w-3 h-3 rounded-full border-2 border-zinc-500 border-t-[#3B82F6] animate-spin" />
               ) : (
@@ -1913,7 +1913,7 @@ export default function NetflixPlayer({
 
       {/* Floating Netflix "Next Episode" Countdown Overlay */}
       {inCreditsWindow && nextEpisode && (
-        <div className="absolute right-8 md:right-12 bottom-36 z-30 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 md:w-96 backdrop-blur-md">
+        <div className="absolute right-8 md:right-12 bottom-36 z-30 bg-[#181818] border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 md:w-96">
           <div className="text-xs uppercase tracking-wider text-zinc-400 font-bold mb-1">
             Up Next in {nextCountdown ?? 5}s
           </div>
@@ -1943,7 +1943,7 @@ export default function NetflixPlayer({
       {activePopover === "room" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 top-20 z-40 bg-[#181818]/95 border border-zinc-700 rounded-xl p-5 shadow-2xl w-[350px] sm:w-[430px] backdrop-blur-md"
+          className="absolute right-6 md:right-12 top-20 z-40 bg-[#181818] border border-zinc-700 rounded-xl p-5 shadow-2xl w-[350px] sm:w-[430px]"
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -2174,7 +2174,7 @@ export default function NetflixPlayer({
       {activePopover === "quality" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96"
         >
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -2220,7 +2220,7 @@ export default function NetflixPlayer({
       {activePopover === "audioSub" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-5 shadow-2xl w-[340px] sm:w-[440px] grid grid-cols-2 gap-6 backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-lg p-5 shadow-2xl w-[340px] sm:w-[440px] grid grid-cols-2 gap-6"
         >
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
@@ -2279,7 +2279,7 @@ export default function NetflixPlayer({
       {activePopover === "speed" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-56 backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-lg p-4 shadow-2xl w-56"
         >
           <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
             Playback Speed
@@ -2312,7 +2312,7 @@ export default function NetflixPlayer({
       {activePopover === "episodes" && item.type === "SERIES" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 max-h-[380px] overflow-y-auto backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 max-h-[380px] overflow-y-auto"
         >
           <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
             {item.title} • Episodes
