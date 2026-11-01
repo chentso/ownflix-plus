@@ -106,37 +106,333 @@ const QUALITY_OPTIONS: {
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
 
-const CHAT_EMOJIS = [
-  "😀",
-  "😂",
-  "🥹",
-  "😍",
-  "🤩",
-  "😎",
-  "🤔",
-  "😮",
-  "😱",
-  "😭",
-  "😡",
-  "🥳",
-  "🤯",
-  "👍",
-  "👎",
-  "👏",
-  "🙌",
-  "🔥",
-  "❤️",
-  "💔",
-  "💯",
-  "✨",
-  "🍿",
-  "🎬",
-  "🍕",
-  "🍻",
-  "🚀",
-  "👀",
-  "💀",
-  "🫡",
+const EMOJI_CATEGORIES: {
+  id: string;
+  label: string;
+  icon: string;
+  emojis: { char: string; keywords: string }[];
+}[] = [
+  {
+    id: "smileys",
+    label: "Smileys & People",
+    icon: "😀",
+    emojis: [
+      { char: "😀", keywords: "grinning happy smile" },
+      { char: "😃", keywords: "smiley happy joy" },
+      { char: "😄", keywords: "smile happy laugh" },
+      { char: "😁", keywords: "grin happy teeth" },
+      { char: "😆", keywords: "laughing squinting xd" },
+      { char: "😅", keywords: "sweat smile relief" },
+      { char: "🤣", keywords: "rofl rolling laughing floor" },
+      { char: "😂", keywords: "joy tears laugh cry" },
+      { char: "🙂", keywords: "slightly smiling" },
+      { char: "🙃", keywords: "upside down silly" },
+      { char: "🫠", keywords: "melting face" },
+      { char: "😉", keywords: "wink" },
+      { char: "😊", keywords: "blush warm smile" },
+      { char: "😇", keywords: "innocent halo angel" },
+      { char: "🥰", keywords: "smiling hearts love adore" },
+      { char: "😍", keywords: "heart eyes love crush" },
+      { char: "🤩", keywords: "star struck excited amazed" },
+      { char: "😘", keywords: "kiss blow heart" },
+      { char: "😗", keywords: "kissing" },
+      { char: "😚", keywords: "kissing closed eyes" },
+      { char: "😙", keywords: "kissing smiling" },
+      { char: "🥲", keywords: "smiling tear proud grateful" },
+      { char: "😋", keywords: "yum delicious tasty" },
+      { char: "😛", keywords: "tongue out playful" },
+      { char: "😜", keywords: "wink tongue crazy" },
+      { char: "🤪", keywords: "zany goofy wild" },
+      { char: "😝", keywords: "squinting tongue" },
+      { char: "🤑", keywords: "money rich dollar" },
+      { char: "🤗", keywords: "hugging hug warm" },
+      { char: "🤭", keywords: "hand over mouth giggle oops" },
+      { char: "🫢", keywords: "gasp shock" },
+      { char: "🫣", keywords: "peeking shy" },
+      { char: "🤫", keywords: "shush quiet secret" },
+      { char: "🤔", keywords: "thinking hmm" },
+      { char: "🫡", keywords: "salute respect" },
+      { char: "🤐", keywords: "zipper mouth silent" },
+      { char: "🤨", keywords: "raised eyebrow skeptical" },
+      { char: "😐", keywords: "neutral straight face" },
+      { char: "😑", keywords: "expressionless annoyed" },
+      { char: "😶", keywords: "no mouth speechless" },
+      { char: "🫥", keywords: "dotted line invisible" },
+      { char: "😏", keywords: "smirk smug" },
+      { char: "😒", keywords: "unamused side eye" },
+      { char: "🙄", keywords: "eye roll whatever" },
+      { char: "😬", keywords: "grimacing awkward" },
+      { char: "😮‍💨", keywords: "exhale sigh phew" },
+      { char: "🤥", keywords: "lying pinocchio" },
+      { char: "😌", keywords: "relieved calm" },
+      { char: "😔", keywords: "pensive sad down" },
+      { char: "😪", keywords: "sleepy tired" },
+      { char: "🤤", keywords: "drooling hungry" },
+      { char: "😴", keywords: "sleeping zzz" },
+      { char: "😷", keywords: "mask sick" },
+      { char: "🤒", keywords: "thermometer fever ill" },
+      { char: "🤕", keywords: "bandage hurt injured" },
+      { char: "🤢", keywords: "nauseated gross sick" },
+      { char: "🤮", keywords: "vomiting puke" },
+      { char: "🤧", keywords: "sneezing achoo" },
+      { char: "🥵", keywords: "hot sweat spicy" },
+      { char: "🥶", keywords: "cold freezing ice" },
+      { char: "🥴", keywords: "woozy dizzy drunk" },
+      { char: "😵", keywords: "dizzy knocked out" },
+      { char: "😵‍💫", keywords: "spiral eyes hypnosis" },
+      { char: "🤯", keywords: "exploding head mind blown" },
+      { char: "🤠", keywords: "cowboy hat yeehaw" },
+      { char: "🥳", keywords: "partying celebrate birthday" },
+      { char: "🥸", keywords: "disguised glasses incognito" },
+      { char: "😎", keywords: "cool sunglasses" },
+      { char: "🤓", keywords: "nerd geek glasses" },
+      { char: "🧐", keywords: "monocle inspect classy" },
+      { char: "😕", keywords: "confused" },
+      { char: "🫤", keywords: "diagonal mouth unsure" },
+      { char: "😟", keywords: "worried concerned" },
+      { char: "🙁", keywords: "slightly frowning" },
+      { char: "😮", keywords: "open mouth wow surprised" },
+      { char: "😯", keywords: "hushed surprised" },
+      { char: "😲", keywords: "astonished shocked" },
+      { char: "😳", keywords: "flushed embarrassed" },
+      { char: "🥺", keywords: "pleading puppy eyes" },
+      { char: "🥹", keywords: "holding back tears touched" },
+      { char: "😦", keywords: "frowning open mouth" },
+      { char: "😧", keywords: "anguished" },
+      { char: "😨", keywords: "fearful scared" },
+      { char: "😰", keywords: "anxious cold sweat" },
+      { char: "😥", keywords: "sad relieved" },
+      { char: "😢", keywords: "crying tear sad" },
+      { char: "😭", keywords: "sobbing loud crying bawling" },
+      { char: "😱", keywords: "screaming fear horror" },
+      { char: "😖", keywords: "confounded" },
+      { char: "😣", keywords: "persevering struggle" },
+      { char: "😞", keywords: "disappointed" },
+      { char: "😓", keywords: "downcast sweat" },
+      { char: "😩", keywords: "weary exhausted" },
+      { char: "😫", keywords: "tired fed up" },
+      { char: "🥱", keywords: "yawning bored" },
+      { char: "😤", keywords: "triumph steam nose mad" },
+      { char: "😡", keywords: "pouting angry rage red" },
+      { char: "😠", keywords: "angry mad" },
+      { char: "🤬", keywords: "cursing swearing symbols" },
+      { char: "😈", keywords: "smiling devil horns" },
+      { char: "👿", keywords: "angry devil" },
+      { char: "💀", keywords: "skull dead im dead" },
+      { char: "☠️", keywords: "skull crossbones danger" },
+      { char: "💩", keywords: "poop pile" },
+      { char: "🤡", keywords: "clown circus" },
+      { char: "👹", keywords: "ogre monster" },
+      { char: "👺", keywords: "goblin" },
+      { char: "👻", keywords: "ghost boo spooky" },
+      { char: "👽", keywords: "alien ufo" },
+      { char: "👾", keywords: "alien monster arcade game" },
+      { char: "🤖", keywords: "robot bot" },
+    ],
+  },
+  {
+    id: "gestures",
+    label: "Hands & Gestures",
+    icon: "👍",
+    emojis: [
+      { char: "👋", keywords: "wave hello bye" },
+      { char: "🤚", keywords: "raised back hand" },
+      { char: "🖐️", keywords: "hand five fingers" },
+      { char: "✋", keywords: "stop high five" },
+      { char: "🖖", keywords: "vulcan salute spock" },
+      { char: "🫱", keywords: "rightwards hand" },
+      { char: "🫲", keywords: "leftwards hand" },
+      { char: "👌", keywords: "ok perfect" },
+      { char: "🤌", keywords: "pinched fingers italian chef kiss" },
+      { char: "🤏", keywords: "pinching small tiny" },
+      { char: "✌️", keywords: "peace victory" },
+      { char: "🤞", keywords: "crossed fingers luck" },
+      { char: "🫰", keywords: "hand index thumb crossed finger heart" },
+      { char: "🤟", keywords: "love you gesture" },
+      { char: "🤘", keywords: "rock on metal horns" },
+      { char: "🤙", keywords: "call me shaka" },
+      { char: "👈", keywords: "point left" },
+      { char: "👉", keywords: "point right" },
+      { char: "👆", keywords: "point up" },
+      { char: "🖕", keywords: "middle finger" },
+      { char: "👇", keywords: "point down" },
+      { char: "☝️", keywords: "index pointing up" },
+      { char: "🫵", keywords: "index pointing at viewer you" },
+      { char: "👍", keywords: "thumbs up like approve yes" },
+      { char: "👎", keywords: "thumbs down dislike no" },
+      { char: "✊", keywords: "raised fist power" },
+      { char: "👊", keywords: "oncoming fist bump" },
+      { char: "🤛", keywords: "left facing fist" },
+      { char: "🤜", keywords: "right facing fist" },
+      { char: "👏", keywords: "clapping applause bravo" },
+      { char: "🙌", keywords: "raising hands hooray praise" },
+      { char: "🫶", keywords: "heart hands love" },
+      { char: "👐", keywords: "open hands" },
+      { char: "🤲", keywords: "palms up together" },
+      { char: "🤝", keywords: "handshake deal agree" },
+      { char: "🙏", keywords: "folded hands pray please thank you" },
+      { char: "✍️", keywords: "writing hand" },
+      { char: "💅", keywords: "nail polish slay" },
+      { char: "💪", keywords: "flexed biceps strong muscle" },
+      { char: "👀", keywords: "eyes looking watching" },
+      { char: "👁️", keywords: "eye" },
+      { char: "🧠", keywords: "brain smart genius" },
+      { char: "🗣️", keywords: "speaking head talk" },
+      { char: "🫂", keywords: "people hugging comfort" },
+      { char: "🤷", keywords: "shrug idk whatever" },
+      { char: "🤦", keywords: "facepalm" },
+      { char: "🙇", keywords: "bowing sorry" },
+      { char: "💃", keywords: "woman dancing party" },
+      { char: "🕺", keywords: "man dancing disco" },
+    ],
+  },
+  {
+    id: "hearts",
+    label: "Hearts & Vibes",
+    icon: "❤️",
+    emojis: [
+      { char: "❤️", keywords: "red heart love" },
+      { char: "🧡", keywords: "orange heart" },
+      { char: "💛", keywords: "yellow heart" },
+      { char: "💚", keywords: "green heart" },
+      { char: "💙", keywords: "blue heart" },
+      { char: "💜", keywords: "purple heart" },
+      { char: "🖤", keywords: "black heart" },
+      { char: "🤍", keywords: "white heart" },
+      { char: "🤎", keywords: "brown heart" },
+      { char: "💔", keywords: "broken heart sad" },
+      { char: "❤️‍🔥", keywords: "heart on fire passion" },
+      { char: "❤️‍🩹", keywords: "mending heart healing" },
+      { char: "❣️", keywords: "heart exclamation" },
+      { char: "💕", keywords: "two hearts" },
+      { char: "💞", keywords: "revolving hearts" },
+      { char: "💓", keywords: "beating heart" },
+      { char: "💗", keywords: "growing heart" },
+      { char: "💖", keywords: "sparkling heart" },
+      { char: "💘", keywords: "heart arrow cupid" },
+      { char: "💝", keywords: "heart ribbon gift" },
+      { char: "💋", keywords: "kiss mark lips" },
+      { char: "💯", keywords: "hundred points 100" },
+      { char: "💢", keywords: "anger symbol" },
+      { char: "💥", keywords: "collision boom explosion" },
+      { char: "💫", keywords: "dizzy star" },
+      { char: "💦", keywords: "sweat droplets" },
+      { char: "💨", keywords: "dashing away fast wind" },
+      { char: "🔥", keywords: "fire lit hot flame" },
+      { char: "✨", keywords: "sparkles magic shine" },
+      { char: "🌟", keywords: "glowing star" },
+      { char: "⭐", keywords: "star" },
+      { char: "⚡", keywords: "high voltage lightning zap" },
+      { char: "🌈", keywords: "rainbow" },
+      { char: "☀️", keywords: "sun sunny" },
+      { char: "🌙", keywords: "crescent moon night" },
+      { char: "💤", keywords: "zzz sleep" },
+    ],
+  },
+  {
+    id: "movies",
+    label: "Movies, Food & Party",
+    icon: "🍿",
+    emojis: [
+      { char: "🍿", keywords: "popcorn movie cinema snack" },
+      { char: "🎬", keywords: "clapper board movie film action" },
+      { char: "🎥", keywords: "movie camera cinema" },
+      { char: "📽️", keywords: "film projector" },
+      { char: "🎞️", keywords: "film frames" },
+      { char: "📺", keywords: "television tv show" },
+      { char: "🎭", keywords: "performing arts drama masks" },
+      { char: "🎟️", keywords: "admission tickets" },
+      { char: "🎫", keywords: "ticket" },
+      { char: "🏆", keywords: "trophy winner award oscar" },
+      { char: "🥇", keywords: "first place medal gold" },
+      { char: "👑", keywords: "crown king queen" },
+      { char: "🎉", keywords: "party popper celebrate" },
+      { char: "🎊", keywords: "confetti ball" },
+      { char: "🎈", keywords: "balloon" },
+      { char: "🎁", keywords: "wrapped gift present" },
+      { char: "🎂", keywords: "birthday cake" },
+      { char: "🍕", keywords: "pizza slice" },
+      { char: "🍔", keywords: "hamburger burger" },
+      { char: "🍟", keywords: "french fries" },
+      { char: "🌭", keywords: "hot dog" },
+      { char: "🌮", keywords: "taco" },
+      { char: "🌯", keywords: "burrito" },
+      { char: "🍣", keywords: "sushi" },
+      { char: "🍜", keywords: "ramen noodles" },
+      { char: "🍩", keywords: "doughnut donut" },
+      { char: "🍪", keywords: "cookie" },
+      { char: "🍫", keywords: "chocolate bar" },
+      { char: "🍦", keywords: "ice cream" },
+      { char: "☕", keywords: "hot beverage coffee tea" },
+      { char: "🥤", keywords: "cup with straw soda" },
+      { char: "🧋", keywords: "bubble tea boba" },
+      { char: "🍺", keywords: "beer mug" },
+      { char: "🍻", keywords: "clinking beer mugs cheers" },
+      { char: "🥂", keywords: "clinking glasses champagne toast" },
+      { char: "🍷", keywords: "wine glass" },
+      { char: "🍸", keywords: "cocktail glass" },
+      { char: "🎮", keywords: "video game controller" },
+      { char: "🎧", keywords: "headphone audio music" },
+      { char: "🎵", keywords: "musical note" },
+      { char: "🎶", keywords: "musical notes" },
+      { char: "🎤", keywords: "microphone" },
+      { char: "🎸", keywords: "guitar rock" },
+    ],
+  },
+  {
+    id: "animals",
+    label: "Animals & Objects",
+    icon: "🚀",
+    emojis: [
+      { char: "🐶", keywords: "dog puppy" },
+      { char: "🐱", keywords: "cat kitty" },
+      { char: "🐭", keywords: "mouse" },
+      { char: "🐹", keywords: "hamster" },
+      { char: "🐰", keywords: "rabbit bunny" },
+      { char: "🦊", keywords: "fox" },
+      { char: "🐻", keywords: "bear" },
+      { char: "🐼", keywords: "panda" },
+      { char: "🐨", keywords: "koala" },
+      { char: "🐯", keywords: "tiger" },
+      { char: "🦁", keywords: "lion" },
+      { char: "🐸", keywords: "frog" },
+      { char: "🐵", keywords: "monkey" },
+      { char: "🙈", keywords: "see no evil monkey" },
+      { char: "🙉", keywords: "hear no evil monkey" },
+      { char: "🙊", keywords: "speak no evil monkey" },
+      { char: "🐧", keywords: "penguin" },
+      { char: "🦄", keywords: "unicorn" },
+      { char: "🐝", keywords: "bee" },
+      { char: "🦋", keywords: "butterfly" },
+      { char: "🐢", keywords: "turtle slow" },
+      { char: "🐍", keywords: "snake" },
+      { char: "🦖", keywords: "t-rex dinosaur" },
+      { char: "🐙", keywords: "octopus" },
+      { char: "🦈", keywords: "shark" },
+      { char: "🐬", keywords: "dolphin" },
+      { char: "🐳", keywords: "whale" },
+      { char: "🐐", keywords: "goat greatest of all time" },
+      { char: "🚀", keywords: "rocket launch space" },
+      { char: "🛸", keywords: "flying saucer ufo" },
+      { char: "🚗", keywords: "car automobile" },
+      { char: "🏎️", keywords: "racing car fast" },
+      { char: "✈️", keywords: "airplane flight" },
+      { char: "💎", keywords: "gem stone diamond" },
+      { char: "💰", keywords: "money bag" },
+      { char: "💸", keywords: "money with wings" },
+      { char: "💣", keywords: "bomb" },
+      { char: "🛡️", keywords: "shield" },
+      { char: "⚔️", keywords: "crossed swords fight" },
+      { char: "🔮", keywords: "crystal ball magic" },
+      { char: "💡", keywords: "light bulb idea" },
+      { char: "🚨", keywords: "police car light alert siren" },
+      { char: "🚩", keywords: "triangular flag red flag" },
+      { char: "✅", keywords: "check mark button yes" },
+      { char: "❌", keywords: "cross mark no" },
+      { char: "❓", keywords: "question mark" },
+      { char: "❗", keywords: "exclamation mark" },
+    ],
+  },
 ];
 
 function detectInitialAutoQuality(): EffectiveQuality {
@@ -278,6 +574,9 @@ export default function NetflixPlayer({
   const [chatText, setChatText] = useState("");
   const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<string>("smileys");
+  const [emojiSearch, setEmojiSearch] = useState("");
+  const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -2475,6 +2774,18 @@ export default function NetflixPlayer({
                           {emo}
                         </button>
                       ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReactionPickerMsgId((prev) =>
+                            prev === msg.id ? null : msg.id
+                          )
+                        }
+                        className="p-1 text-zinc-400 hover:text-white rounded"
+                        title="More reactions"
+                      >
+                        <Smile className="w-3 h-3" />
+                      </button>
                       {isOwn && (
                         <>
                           <div className="w-px h-3.5 bg-zinc-700 mx-0.5" />
@@ -2499,6 +2810,37 @@ export default function NetflixPlayer({
                           </button>
                         </>
                       )}
+                    </div>
+                  )}
+
+                  {/* Expanded Reaction Emoji Picker for this Message */}
+                  {reactionPickerMsgId === msg.id && (
+                    <div className="mt-2 mb-2 bg-[#1a1a1a] border border-zinc-700 rounded-xl p-2.5 shadow-2xl z-30">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                        <span>React with any emoji</span>
+                        <button
+                          type="button"
+                          onClick={() => setReactionPickerMsgId(null)}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto pr-1">
+                        {EMOJI_CATEGORIES.flatMap((c) => c.emojis).map((item) => (
+                          <button
+                            key={`react-${msg.id}-${item.char}`}
+                            type="button"
+                            onClick={() => {
+                              handleToggleReaction(msg.id, item.char);
+                              setReactionPickerMsgId(null);
+                            }}
+                            className="h-7 rounded hover:bg-zinc-800 flex items-center justify-center text-base transition-transform hover:scale-110"
+                          >
+                            {item.char}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -2637,11 +2979,11 @@ export default function NetflixPlayer({
 
         {/* Compose Area (Teams-style with Image Preview, Emoji Picker, Picture Upload) */}
         <div className="relative border-t border-zinc-800 bg-[#161616] p-3">
-          {/* Emoji Picker Popover */}
+          {/* Emoji Picker Popover (Full Categorized + Searchable Teams Style) */}
           {showEmojiPicker && (
-            <div className="absolute bottom-full left-3 right-3 mb-2 bg-[#1e1e1e] border border-zinc-700 rounded-xl p-3 shadow-2xl z-40">
+            <div className="absolute bottom-full left-3 right-3 mb-2 bg-[#1e1e1e] border border-zinc-700 rounded-xl p-3 shadow-2xl z-40 flex flex-col max-h-80">
               <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                <span>Emojis</span>
+                <span>Emoji Picker</span>
                 <button
                   type="button"
                   onClick={() => setShowEmojiPicker(false)}
@@ -2650,19 +2992,91 @@ export default function NetflixPlayer({
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <div className="grid grid-cols-8 gap-1">
-                {CHAT_EMOJIS.map((emo) => (
-                  <button
-                    key={emo}
-                    type="button"
-                    onClick={() => {
-                      setChatText((prev) => prev + emo);
-                    }}
-                    className="h-8 rounded hover:bg-zinc-800 flex items-center justify-center text-base transition-transform hover:scale-110"
-                  >
-                    {emo}
-                  </button>
-                ))}
+
+              {/* Search Input */}
+              <input
+                type="text"
+                value={emojiSearch}
+                onChange={(e) => setEmojiSearch(e.target.value)}
+                placeholder="Search emojis (e.g. laugh, fire, popcorn, heart)..."
+                className="w-full bg-zinc-900 border border-zinc-700/80 focus:border-[#E50914] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 outline-none mb-2"
+              />
+
+              {/* Category Tabs */}
+              {!emojiSearch.trim() && (
+                <div className="flex items-center gap-1 border-b border-zinc-800 pb-1.5 mb-2">
+                  {EMOJI_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveEmojiCategory(cat.id)}
+                      title={cat.label}
+                      className={`flex-1 py-1 rounded text-sm transition-colors ${
+                        activeEmojiCategory === cat.id
+                          ? "bg-zinc-800 border-b-2 border-[#E50914]"
+                          : "hover:bg-zinc-800/50 opacity-70 hover:opacity-100"
+                      }`}
+                    >
+                      {cat.icon}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Scrollable Emoji Grid */}
+              <div className="overflow-y-auto flex-1 pr-1">
+                {emojiSearch.trim() ? (
+                  <div className="grid grid-cols-8 gap-1">
+                    {EMOJI_CATEGORIES.flatMap((c) => c.emojis)
+                      .filter((e) =>
+                        e.keywords
+                          .toLowerCase()
+                          .includes(emojiSearch.trim().toLowerCase())
+                      )
+                      .map((item, idx) => (
+                        <button
+                          key={`search-${item.char}-${idx}`}
+                          type="button"
+                          onClick={() =>
+                            setChatText((prev) => prev + item.char)
+                          }
+                          title={item.keywords}
+                          className="h-8 rounded hover:bg-zinc-800 flex items-center justify-center text-lg transition-transform hover:scale-110"
+                        >
+                          {item.char}
+                        </button>
+                      ))}
+                  </div>
+                ) : (
+                  (() => {
+                    const currentCat =
+                      EMOJI_CATEGORIES.find(
+                        (c) => c.id === activeEmojiCategory
+                      ) || EMOJI_CATEGORIES[0];
+                    return (
+                      <div>
+                        <div className="text-[10px] font-semibold text-zinc-400 mb-1.5">
+                          {currentCat.label} ({currentCat.emojis.length})
+                        </div>
+                        <div className="grid grid-cols-8 gap-1">
+                          {currentCat.emojis.map((item, idx) => (
+                            <button
+                              key={`${currentCat.id}-${item.char}-${idx}`}
+                              type="button"
+                              onClick={() =>
+                                setChatText((prev) => prev + item.char)
+                              }
+                              title={item.keywords}
+                              className="h-8 rounded hover:bg-zinc-800 flex items-center justify-center text-lg transition-transform hover:scale-110"
+                            >
+                              {item.char}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
             </div>
           )}
