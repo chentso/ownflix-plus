@@ -18,11 +18,14 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 
 interface ProfileGateProps {
   profiles: Profile[];
   onSelectProfile: (profile: Profile) => void;
+  onForgetProfile?: (profileId: string) => void;
   onProfilesChanged: () => Promise<void>;
 }
 
@@ -53,13 +56,22 @@ export function renderProfileIcon(iconId: string, className = "w-14 h-14") {
 export default function ProfileGate({
   profiles,
   onSelectProfile,
+  onForgetProfile,
   onProfilesChanged,
 }: ProfileGateProps) {
   const [isManaging, setIsManaging] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  // Unlock password prompt state
+  // Sign In to an Existing Profile by Name + Password
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signInName, setSignInName] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [verifyingSignIn, setVerifyingSignIn] = useState(false);
+  const [showSignInPass, setShowSignInPass] = useState(false);
+
+  // Unlock password prompt state for a remembered profile
   const [unlockingProfile, setUnlockingProfile] = useState<Profile | null>(
     null
   );
@@ -113,13 +125,42 @@ export default function ProfileGate({
       if (!res.ok) {
         setUnlockError(data.error || "Incorrect password");
       } else {
-        const target = unlockingProfile;
+        const target = data.profile || unlockingProfile;
         setUnlockingProfile(null);
         setUnlockPassword("");
         onSelectProfile(target);
       }
     } finally {
       setVerifyingUnlock(false);
+    }
+  };
+
+  const handleSignInByNameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signInName.trim()) return;
+    setVerifyingSignIn(true);
+    setSignInError(null);
+    try {
+      const res = await fetch("/api/profiles/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: signInName.trim(),
+          password: signInPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.profile) {
+        setSignInError(data.error || "Invalid profile name or password");
+      } else {
+        setIsSigningIn(false);
+        setSignInName("");
+        setSignInPassword("");
+        await onProfilesChanged();
+        onSelectProfile(data.profile);
+      }
+    } finally {
+      setVerifyingSignIn(false);
     }
   };
 
@@ -178,6 +219,12 @@ export default function ProfileGate({
           setFormError(data.error || "Failed to create profile");
           return;
         }
+        await onProfilesChanged();
+        closeModal();
+        if (data.profile) {
+          onSelectProfile(data.profile);
+        }
+        return;
       } else if (editingProfile) {
         const res = await fetch("/api/profiles", {
           method: "PATCH",
@@ -211,7 +258,6 @@ export default function ProfileGate({
   };
 
   const handleDelete = async (id: string) => {
-    if (profiles.length <= 1) return;
     setSaving(true);
     setFormError(null);
     try {
@@ -228,6 +274,7 @@ export default function ProfileGate({
         );
         return;
       }
+      if (onForgetProfile) onForgetProfile(id);
       await onProfilesChanged();
       closeModal();
     } finally {
@@ -251,9 +298,14 @@ export default function ProfileGate({
 
       {/* Main Profile Picker */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 -mt-10">
-        <h1 className="text-3xl md:text-5xl font-medium tracking-tight mb-10 text-center">
+        <h1 className="text-3xl md:text-5xl font-medium tracking-tight mb-3 text-center">
           {isManaging ? "Manage Profiles:" : "Who's watching?"}
         </h1>
+        <p className="text-xs sm:text-sm text-zinc-400 mb-10 text-center max-w-md">
+          {profiles.length === 0
+            ? "Sign in to your existing profile or create a new profile on this device."
+            : "Showing only profiles you have signed into on this browser."}
+        </p>
 
         <div className="flex flex-wrap items-center justify-center gap-6 md:gap-8 max-w-4xl">
           {profiles.map((profile) => (
@@ -268,7 +320,6 @@ export default function ProfileGate({
                   background: `linear-gradient(145deg, ${profile.avatarColor}, #111111 150%)`,
                 }}
               >
-                {/* Netflix-style subtle top highlight */}
                 <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
 
                 <div className="text-white/95 drop-shadow">
@@ -311,38 +362,151 @@ export default function ProfileGate({
             </button>
           ))}
 
-          {profiles.length < 6 && (
-            <button
-              onClick={openCreateModal}
-              className="group flex flex-col items-center focus:outline-none"
-            >
-              <div className="w-28 h-28 md:w-36 md:h-36 rounded-md flex items-center justify-center border-2 border-transparent group-hover:bg-zinc-200 group-hover:text-black bg-zinc-800/60 text-zinc-400 transition-all duration-200 group-hover:scale-105">
-                <Plus className="w-14 h-14" />
-              </div>
-              <span className="mt-3 text-zinc-400 group-hover:text-white text-base md:text-lg transition-colors">
-                Add Profile
-              </span>
-            </button>
-          )}
-        </div>
-
-        <div className="mt-14">
+          {/* Sign In to Existing Profile Card */}
           <button
-            onClick={() => setIsManaging((v) => !v)}
-            className={`px-7 py-2.5 text-sm md:text-base tracking-widest uppercase font-medium transition-all ${
-              isManaging
-                ? "bg-white text-black hover:bg-[#E50914] hover:text-white font-bold"
-                : "border border-zinc-500 text-zinc-400 hover:border-white hover:text-white"
-            }`}
+            onClick={() => {
+              setSignInName("");
+              setSignInPassword("");
+              setSignInError(null);
+              setIsSigningIn(true);
+            }}
+            className="group flex flex-col items-center focus:outline-none"
           >
-            {isManaging ? "Done" : "Manage Profiles"}
+            <div className="w-28 h-28 md:w-36 md:h-36 rounded-md flex items-center justify-center border-2 border-zinc-700 group-hover:border-white group-hover:bg-zinc-800 bg-zinc-900/70 text-zinc-300 group-hover:text-white transition-all duration-200 group-hover:scale-105">
+              <LogIn className="w-12 h-12" />
+            </div>
+            <span className="mt-3 text-zinc-400 group-hover:text-white text-base md:text-lg transition-colors">
+              Sign In Profile
+            </span>
+          </button>
+
+          {/* Create New Profile Card */}
+          <button
+            onClick={openCreateModal}
+            className="group flex flex-col items-center focus:outline-none"
+          >
+            <div className="w-28 h-28 md:w-36 md:h-36 rounded-md flex items-center justify-center border-2 border-transparent group-hover:bg-zinc-200 group-hover:text-black bg-zinc-800/60 text-zinc-400 transition-all duration-200 group-hover:scale-105">
+              <Plus className="w-14 h-14" />
+            </div>
+            <span className="mt-3 text-zinc-400 group-hover:text-white text-base md:text-lg transition-colors">
+              Create Profile
+            </span>
           </button>
         </div>
+
+        {profiles.length > 0 && (
+          <div className="mt-14">
+            <button
+              onClick={() => setIsManaging((v) => !v)}
+              className={`px-7 py-2.5 text-sm md:text-base tracking-widest uppercase font-medium transition-all ${
+                isManaging
+                  ? "bg-white text-black hover:bg-[#E50914] hover:text-white font-bold"
+                  : "border border-zinc-500 text-zinc-400 hover:border-white hover:text-white"
+              }`}
+            >
+              {isManaging ? "Done" : "Manage Profiles"}
+            </button>
+          </div>
+        )}
       </main>
 
       <footer className="py-6 text-center text-xs text-zinc-600">
         OwnFlix+ Self-Hosted Streaming Engine • Direct Play & FFmpeg Live Remux
       </footer>
+
+      {/* Sign In to Existing Profile Modal (By Profile Name + Password) */}
+      {isSigningIn && (
+        <div
+          onClick={() => setIsSigningIn(false)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <form
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={handleSignInByNameSubmit}
+            className="bg-[#181818] border border-zinc-800 rounded-xl max-w-md w-full p-6 md:p-8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2.5">
+                <LogIn className="w-5 h-5 text-[#E50914]" />
+                <h2 className="text-xl font-bold">Sign In to Profile</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSigningIn(false)}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {signInError && (
+              <div className="mb-4 px-3 py-2 bg-red-950/80 border border-red-700/70 rounded text-xs text-red-200">
+                {signInError}
+              </div>
+            )}
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1.5">
+                  Profile Name
+                </label>
+                <input
+                  type="text"
+                  value={signInName}
+                  onChange={(e) => setSignInName(e.target.value)}
+                  placeholder="Enter your profile name"
+                  autoFocus
+                  required
+                  className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3.5 py-2.5 text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-1.5">
+                  Password (leave blank if none set)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSignInPass ? "text" : "password"}
+                    value={signInPassword}
+                    onChange={(e) => setSignInPassword(e.target.value)}
+                    placeholder="Enter profile password"
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3.5 py-2.5 text-white outline-none pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignInPass((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                  >
+                    {showSignInPass ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSigningIn(false)}
+                className="px-4 py-2 text-sm border border-zinc-600 text-zinc-300 hover:text-white rounded"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={verifyingSignIn}
+                className="px-6 py-2 text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+              >
+                {verifyingSignIn ? "Signing In..." : "Sign In"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Profile Lock Password Verification Modal */}
       {unlockingProfile && (
@@ -442,7 +606,7 @@ export default function ProfileGate({
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">
-                {isCreating ? "Add Profile" : "Edit Profile"}
+                {isCreating ? "Create Profile" : "Edit Profile"}
               </h2>
               <button
                 type="button"
@@ -616,7 +780,7 @@ export default function ProfileGate({
             </div>
 
             {/* Kids Toggle */}
-            <label className="flex items-center gap-3 cursor-pointer mb-7">
+            <label className="flex items-center gap-3 cursor-pointer mb-6">
               <input
                 type="checkbox"
                 checked={isKids}
@@ -628,22 +792,39 @@ export default function ProfileGate({
               </span>
             </label>
 
-            <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
-              {editingProfile && profiles.length > 1 ? (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handleDelete(editingProfile.id)}
-                  className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 px-3 py-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Profile
-                </button>
-              ) : (
-                <div />
-              )}
+            <div className="flex flex-col gap-3 pt-4 border-t border-zinc-800">
+              <div className="flex items-center justify-between">
+                {editingProfile && onForgetProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onForgetProfile(editingProfile.id);
+                      closeModal();
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white py-1.5"
+                    title="Hide this profile from this browser without deleting its account"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Forget on This Device</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
 
-              <div className="flex items-center gap-3">
+                {editingProfile && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleDelete(editingProfile.id)}
+                    className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 py-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Account</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={closeModal}

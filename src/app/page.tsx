@@ -56,15 +56,38 @@ export default function OwnFlixApp() {
   const [verifyingSwitch, setVerifyingSwitch] = useState(false);
   const [showSwitchPass, setShowSwitchPass] = useState(false);
 
+  const [knownProfileIds, setKnownProfileIds] = useState<string[]>([]);
+
   const handleSelectProfile = useCallback((profile: Profile | null) => {
     setActiveProfile(profile);
     if (typeof window !== "undefined") {
       if (profile) {
         window.localStorage.setItem("ownflix_active_profile_id", profile.id);
+        setKnownProfileIds((prev) => {
+          const next = Array.from(new Set([...prev, profile.id]));
+          window.localStorage.setItem(
+            "ownflix_known_profile_ids",
+            JSON.stringify(next)
+          );
+          return next;
+        });
       } else {
         window.localStorage.removeItem("ownflix_active_profile_id");
       }
     }
+  }, []);
+
+  const handleForgetProfile = useCallback((profileId: string) => {
+    setKnownProfileIds((prev) => {
+      const next = prev.filter((id) => id !== profileId);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          "ownflix_known_profile_ids",
+          JSON.stringify(next)
+        );
+      }
+      return next;
+    });
   }, []);
 
   const fetchProfiles = useCallback(async () => {
@@ -78,6 +101,28 @@ export default function OwnFlixApp() {
         const savedId = window.localStorage.getItem(
           "ownflix_active_profile_id"
         );
+        let parsedKnown: string[] = [];
+        try {
+          const rawKnown = window.localStorage.getItem(
+            "ownflix_known_profile_ids"
+          );
+          if (rawKnown) {
+            parsedKnown = JSON.parse(rawKnown);
+          }
+        } catch {
+          parsedKnown = [];
+        }
+
+        if (savedId && !parsedKnown.includes(savedId)) {
+          parsedKnown.push(savedId);
+          window.localStorage.setItem(
+            "ownflix_known_profile_ids",
+            JSON.stringify(parsedKnown)
+          );
+        }
+
+        setKnownProfileIds(parsedKnown);
+
         if (savedId) {
           const matched = loadedProfiles.find((p) => p.id === savedId);
           if (matched) {
@@ -87,6 +132,12 @@ export default function OwnFlixApp() {
       }
     }
   }, []);
+
+  // Only show profiles that the user has logged into on this browser
+  const visibleProfiles = useMemo(
+    () => profiles.filter((p) => knownProfileIds.includes(p.id)),
+    [profiles, knownProfileIds]
+  );
 
   const fetchMedia = useCallback(async (profileId?: string) => {
     const pid = profileId || "";
@@ -286,8 +337,9 @@ export default function OwnFlixApp() {
   if (!activeProfile) {
     return (
       <ProfileGate
-        profiles={profiles}
+        profiles={visibleProfiles}
         onSelectProfile={(profile) => handleSelectProfile(profile)}
+        onForgetProfile={handleForgetProfile}
         onProfilesChanged={fetchProfiles}
       />
     );
@@ -312,7 +364,7 @@ export default function OwnFlixApp() {
       {/* Top Sticky Netflix Navbar */}
       <Navbar
         activeProfile={activeProfile}
-        profiles={profiles}
+        profiles={visibleProfiles}
         activeCategory={activeCategory}
         onSelectCategory={(cat) => setActiveCategory(cat)}
         searchQuery={searchQuery}
