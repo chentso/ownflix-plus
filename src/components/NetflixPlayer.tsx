@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MediaItem, Episode, Profile } from "@/types/ownflix";
-import { WatchRoom, WatchTogetherMode } from "@/lib/rooms";
+import { WatchRoom, WatchTogetherMode, RoomChatMessage } from "@/lib/rooms";
 import { renderProfileIcon } from "./ProfileGate";
 import {
   ArrowLeft,
@@ -28,6 +28,10 @@ import {
   X,
   MessageSquare,
   Send,
+  Smile,
+  Image as ImageIcon,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 interface NetflixPlayerProps {
@@ -98,6 +102,41 @@ const QUALITY_OPTIONS: {
     bitrate: "~450 Kbps",
     desc: "Fastest loading on weak Wi-Fi or mobile hotspots",
   },
+];
+
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+const CHAT_EMOJIS = [
+  "😀",
+  "😂",
+  "🥹",
+  "😍",
+  "🤩",
+  "😎",
+  "🤔",
+  "😮",
+  "😱",
+  "😭",
+  "😡",
+  "🥳",
+  "🤯",
+  "👍",
+  "👎",
+  "👏",
+  "🙌",
+  "🔥",
+  "❤️",
+  "💔",
+  "💯",
+  "✨",
+  "🍿",
+  "🎬",
+  "🍕",
+  "🍻",
+  "🚀",
+  "👀",
+  "💀",
+  "🫡",
 ];
 
 function detectInitialAutoQuality(): EffectiveQuality {
@@ -237,20 +276,14 @@ export default function NetflixPlayer({
   const [copiedLink, setCopiedLink] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [chatText, setChatText] = useState("");
-  const [localMessages, setLocalMessages] = useState<
-    {
-      id: string;
-      participantId: string;
-      profileId: string;
-      profileName: string;
-      avatarColor: string;
-      avatarIcon: string;
-      text: string;
-      videoTimestamp: number;
-      createdAt: number;
-    }[]
-  >([]);
+  const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [localMessages, setLocalMessages] = useState<RoomChatMessage[]>([]);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const chatImageInputRef = useRef<HTMLInputElement>(null);
 
   // Quality mode state
   const [qualityMode, setQualityMode] = useState<StreamQualityMode>(() => {
@@ -566,12 +599,52 @@ export default function NetflixPlayer({
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
+  // Compress & convert selected or pasted image to data URL
+  const processChatImageFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxDim = 900;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.84);
+          setChatImagePreview(dataUrl);
+        } else if (typeof reader.result === "string") {
+          setChatImagePreview(reader.result);
+        }
+      };
+      if (typeof reader.result === "string") {
+        img.src = reader.result;
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Send Chat Message (in active room or local notes)
   const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = chatText.trim();
-    if (!trimmed) return;
+    const attachedImg = chatImagePreview;
+    if (!trimmed && !attachedImg) return;
     setChatText("");
+    setChatImagePreview(null);
+    setShowEmojiPicker(false);
 
     if (roomId) {
       const res = await fetch("/api/rooms", {
@@ -581,6 +654,7 @@ export default function NetflixPlayer({
           action: "chat",
           roomId,
           messageText: trimmed,
+          imageUrl: attachedImg,
           participant: {
             participantId: participantIdRef.current,
             profileId: activeProfile.id,
@@ -609,10 +683,118 @@ export default function NetflixPlayer({
           avatarColor: activeProfile.avatarColor,
           avatarIcon: activeProfile.avatarIcon,
           text: trimmed,
+          imageUrl: attachedImg,
+          reactions: {},
+          editedAt: null,
           videoTimestamp: currentTime,
           createdAt: Date.now(),
         },
       ]);
+    }
+  };
+
+  // Toggle Emoji Reaction on a Message
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    if (roomId) {
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reactChat",
+          roomId,
+          messageId,
+          emoji,
+          participant: {
+            participantId: participantIdRef.current,
+            profileId: activeProfile.id,
+            profileName: activeProfile.name,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.room) {
+        setRoom(data.room);
+      }
+    } else {
+      setLocalMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const reactions = { ...(m.reactions || {}) };
+          const list = [...(reactions[emoji] || [])];
+          const idx = list.findIndex((r) => r.profileId === activeProfile.id);
+          if (idx !== -1) {
+            list.splice(idx, 1);
+            if (list.length === 0) delete reactions[emoji];
+            else reactions[emoji] = list;
+          } else {
+            reactions[emoji] = [
+              ...list,
+              { profileId: activeProfile.id, profileName: activeProfile.name },
+            ];
+          }
+          return { ...m, reactions };
+        })
+      );
+    }
+  };
+
+  // Save Edited Message
+  const handleSaveEditMessage = async (messageId: string) => {
+    const trimmed = editingText.trim();
+    if (roomId) {
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "editChat",
+          roomId,
+          messageId,
+          messageText: trimmed,
+          participant: {
+            participantId: participantIdRef.current,
+            profileId: activeProfile.id,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.room) {
+        setRoom(data.room);
+      }
+    } else {
+      setLocalMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId && (trimmed || m.imageUrl)
+            ? { ...m, text: trimmed, editedAt: Date.now() }
+            : m
+        )
+      );
+    }
+    setEditingMessageId(null);
+    setEditingText("");
+  };
+
+  // Delete Own Message
+  const handleDeleteMessage = async (messageId: string) => {
+    if (roomId) {
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "deleteChat",
+          roomId,
+          messageId,
+          participant: {
+            participantId: participantIdRef.current,
+            profileId: activeProfile.id,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.room) {
+        setRoom(data.room);
+      }
+    } else {
+      setLocalMessages((prev) => prev.filter((m) => m.id !== messageId));
     }
   };
 
@@ -2250,7 +2432,7 @@ export default function NetflixPlayer({
         {/* Messages Feed */}
         <div
           ref={chatScrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-3"
+          className="flex-1 overflow-y-auto p-3.5 space-y-3"
         >
           {displayedMessages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4 text-zinc-500">
@@ -2260,47 +2442,192 @@ export default function NetflixPlayer({
               </p>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
                 {room
-                  ? "Say hello to everyone watching in this room!"
-                  : "Send a timestamped reaction or click 'Start Room' above to invite friends with a share link."}
+                  ? "Send emojis, react to messages, or share pictures with everyone watching!"
+                  : "Send a message, emoji, or picture, or click 'Start Room' above to invite friends."}
               </p>
             </div>
           ) : (
             displayedMessages.map((msg) => {
-              const isOwn = msg.participantId === participantIdRef.current;
+              const isOwn =
+                msg.participantId === participantIdRef.current ||
+                msg.profileId === activeProfile.id;
+              const isEditing = editingMessageId === msg.id;
+              const reactionEntries = Object.entries(msg.reactions || {}).filter(
+                ([, list]) => list && list.length > 0
+              );
+
               return (
                 <div
                   key={msg.id}
-                  className="flex items-start gap-2.5 text-xs group"
+                  className="group/msg relative rounded-lg p-2.5 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800/70 hover:border-zinc-700 transition-colors text-xs"
                 >
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow"
-                    style={{
-                      background: `linear-gradient(145deg, ${msg.avatarColor}, #111111 150%)`,
-                    }}
-                  >
-                    {renderProfileIcon(msg.avatarIcon, "w-4 h-4 text-white")}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className={`font-bold truncate ${
-                          isOwn ? "text-white" : "text-zinc-200"
-                        }`}
-                      >
-                        {msg.profileName}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => seekTo(msg.videoTimestamp)}
-                        className="text-[10px] font-mono text-zinc-500 hover:text-[#E50914] transition-colors"
-                        title="Jump to this video timestamp"
-                      >
-                        {formatTime(msg.videoTimestamp)}
-                      </button>
+                  {/* Microsoft Teams Floating Hover Reaction & Action Toolbar */}
+                  {!isEditing && (
+                    <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-3 right-2 z-20 flex items-center gap-0.5 bg-[#1f1f1f] border border-zinc-700 rounded-full px-1.5 py-0.5 shadow-xl">
+                      {QUICK_REACTIONS.map((emo) => (
+                        <button
+                          key={emo}
+                          type="button"
+                          onClick={() => handleToggleReaction(msg.id, emo)}
+                          className="hover:scale-125 transition-transform px-1 py-0.5 text-xs leading-none"
+                          title={`React ${emo}`}
+                        >
+                          {emo}
+                        </button>
+                      ))}
+                      {isOwn && (
+                        <>
+                          <div className="w-px h-3.5 bg-zinc-700 mx-0.5" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMessageId(msg.id);
+                              setEditingText(msg.text);
+                            }}
+                            className="p-1 text-zinc-400 hover:text-white rounded"
+                            title="Edit message"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="p-1 text-zinc-400 hover:text-red-400 rounded"
+                            title="Delete message"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
                     </div>
-                    <p className="text-zinc-300 break-words leading-relaxed mt-0.5">
-                      {msg.text}
-                    </p>
+                  )}
+
+                  <div className="flex items-start gap-2.5">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow"
+                      style={{
+                        background: `linear-gradient(145deg, ${msg.avatarColor}, #111111 150%)`,
+                      }}
+                    >
+                      {renderProfileIcon(msg.avatarIcon, "w-4 h-4 text-white")}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span
+                          className={`font-bold truncate ${
+                            isOwn ? "text-white" : "text-zinc-200"
+                          }`}
+                        >
+                          {msg.profileName}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => seekTo(msg.videoTimestamp)}
+                          className="text-[10px] font-mono text-zinc-500 hover:text-[#E50914] transition-colors"
+                          title="Jump to this video timestamp"
+                        >
+                          {formatTime(msg.videoTimestamp)}
+                        </button>
+                        {msg.editedAt && (
+                          <span className="text-[10px] text-zinc-500 italic">
+                            Edited
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Inline Edit Form OR Message Text */}
+                      {isEditing ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleSaveEditMessage(msg.id);
+                          }}
+                          className="mt-1.5 space-y-1.5"
+                        >
+                          <input
+                            type="text"
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            autoFocus
+                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-[#E50914] rounded px-2.5 py-1.5 text-xs text-white outline-none"
+                          />
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMessageId(null);
+                                setEditingText("");
+                              }}
+                              className="px-2 py-0.5 text-[11px] text-zinc-400 hover:text-white rounded border border-zinc-700"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-2.5 py-0.5 text-[11px] bg-[#E50914] hover:bg-[#f6121d] text-white font-semibold rounded"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          {msg.text && (
+                            <p className="text-zinc-200 break-words leading-relaxed mt-1 whitespace-pre-wrap">
+                              {msg.text}
+                            </p>
+                          )}
+
+                          {/* Attached Picture */}
+                          {msg.imageUrl && (
+                            <div className="mt-2">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={msg.imageUrl}
+                                alt="Chat attachment"
+                                onClick={() =>
+                                  setLightboxImage(msg.imageUrl || null)
+                                }
+                                className="max-h-48 w-auto rounded-lg border border-zinc-700/80 object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+                              />
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Reactions Pill Row */}
+                      {reactionEntries.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 mt-2">
+                          {reactionEntries.map(([emo, users]) => {
+                            const hasMine = users.some(
+                              (u) => u.profileId === activeProfile.id
+                            );
+                            const names = users
+                              .map((u) => u.profileName)
+                              .join(", ");
+                            return (
+                              <button
+                                key={emo}
+                                type="button"
+                                onClick={() =>
+                                  handleToggleReaction(msg.id, emo)
+                                }
+                                title={`Reacted by: ${names}`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                                  hasMine
+                                    ? "bg-[#E50914]/20 border-[#E50914] text-white font-semibold"
+                                    : "bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                                }`}
+                              >
+                                <span>{emo}</span>
+                                <span>{users.length}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -2308,30 +2635,161 @@ export default function NetflixPlayer({
           )}
         </div>
 
-        {/* Chat Input Box */}
-        <form
-          onSubmit={handleSendChat}
-          className="p-3 border-t border-zinc-800 bg-[#161616] flex items-center gap-2"
-        >
+        {/* Compose Area (Teams-style with Image Preview, Emoji Picker, Picture Upload) */}
+        <div className="relative border-t border-zinc-800 bg-[#161616] p-3">
+          {/* Emoji Picker Popover */}
+          {showEmojiPicker && (
+            <div className="absolute bottom-full left-3 right-3 mb-2 bg-[#1e1e1e] border border-zinc-700 rounded-xl p-3 shadow-2xl z-40">
+              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                <span>Emojis</span>
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker(false)}
+                  className="text-zinc-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-8 gap-1">
+                {CHAT_EMOJIS.map((emo) => (
+                  <button
+                    key={emo}
+                    type="button"
+                    onClick={() => {
+                      setChatText((prev) => prev + emo);
+                    }}
+                    className="h-8 rounded hover:bg-zinc-800 flex items-center justify-center text-base transition-transform hover:scale-110"
+                  >
+                    {emo}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Staged Image Attachment Preview */}
+          {chatImagePreview && (
+            <div className="mb-2.5 relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={chatImagePreview}
+                alt="Upload preview"
+                className="h-20 w-auto rounded-lg border border-zinc-700 object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => setChatImagePreview(null)}
+                className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-black border border-zinc-600 text-white flex items-center justify-center hover:bg-red-600"
+                title="Remove picture"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Hidden File Input for Pictures */}
           <input
-            type="text"
-            value={chatText}
-            onChange={(e) => setChatText(e.target.value)}
-            placeholder={
-              room ? "Send a message to room..." : "Write a chat message..."
-            }
-            className="flex-1 bg-zinc-900 border border-zinc-700/80 focus:border-[#E50914] rounded-full px-3.5 py-2 text-xs text-white placeholder-zinc-500 outline-none transition-colors"
+            ref={chatImageInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) processChatImageFile(file);
+              e.target.value = "";
+            }}
+            className="hidden"
           />
-          <button
-            type="submit"
-            disabled={!chatText.trim()}
-            className="w-8 h-8 rounded-full bg-[#E50914] hover:bg-[#f6121d] disabled:opacity-40 text-white flex items-center justify-center shrink-0 transition-colors"
-            title="Send Message"
+
+          <form
+            onSubmit={handleSendChat}
+            className="bg-zinc-900 border border-zinc-700/80 focus-within:border-[#E50914] rounded-xl px-3 py-2 transition-colors"
           >
-            <Send className="w-3.5 h-3.5" />
-          </button>
-        </form>
+            <input
+              type="text"
+              value={chatText}
+              onChange={(e) => setChatText(e.target.value)}
+              onPaste={(e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (let i = 0; i < items.length; i++) {
+                  if (items[i].type.startsWith("image/")) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                      e.preventDefault();
+                      processChatImageFile(file);
+                      break;
+                    }
+                  }
+                }
+              }}
+              placeholder={
+                room
+                  ? "Type a message or paste a picture..."
+                  : "Type a message..."
+              }
+              className="w-full bg-transparent text-xs text-white placeholder-zinc-500 outline-none mb-2"
+            />
+
+            <div className="flex items-center justify-between pt-1.5 border-t border-zinc-800/80">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker((v) => !v)}
+                  className={`p-1.5 rounded hover:bg-zinc-800 transition-colors ${
+                    showEmojiPicker
+                      ? "text-[#E50914] bg-zinc-800"
+                      : "text-zinc-400 hover:text-white"
+                  }`}
+                  title="Insert emoji"
+                >
+                  <Smile className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => chatImageInputRef.current?.click()}
+                  className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                  title="Attach picture"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!chatText.trim() && !chatImagePreview}
+                className="px-3 py-1 rounded-md bg-[#E50914] hover:bg-[#f6121d] disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 transition-colors"
+                title="Send Message"
+              >
+                <span>Send</span>
+                <Send className="w-3 h-3" />
+              </button>
+            </div>
+          </form>
+        </div>
       </aside>
+
+      {/* Fullscreen Lightbox for Clicked Chat Pictures */}
+      {lightboxImage && (
+        <div
+          onClick={() => setLightboxImage(null)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700 text-white flex items-center justify-center hover:bg-zinc-800"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxImage}
+            alt="Full size attachment"
+            className="max-w-full max-h-full rounded-lg shadow-2xl border border-zinc-800 object-contain"
+          />
+        </div>
+      )}
     </div>
   );
 }

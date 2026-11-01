@@ -15,6 +15,11 @@ export interface RoomParticipant {
   updatedAt: number;
 }
 
+export interface MessageReaction {
+  profileId: string;
+  profileName: string;
+}
+
 export interface RoomChatMessage {
   id: string;
   participantId: string;
@@ -23,6 +28,9 @@ export interface RoomChatMessage {
   avatarColor: string;
   avatarIcon: string;
   text: string;
+  imageUrl?: string | null;
+  reactions?: Record<string, MessageReaction[]>;
+  editedAt?: number | null;
   videoTimestamp: number;
   createdAt: number;
 }

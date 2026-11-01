@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
     mode,
     participant,
     seekTime,
+    messageId,
     messageText,
+    imageUrl,
+    emoji,
   } = body;
 
   const store = getRoomsStore();
@@ -177,21 +180,82 @@ export async function POST(req: NextRequest) {
       room.lastSeekSeq += 1;
       room.lastSeekTime = seekTime;
     }
-  } else if (action === "chat" && typeof messageText === "string" && messageText.trim()) {
-    if (!room.messages) room.messages = [];
-    room.messages.push({
-      id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      participantId: participant?.participantId || "guest",
-      profileId: participant?.profileId || "guest",
-      profileName: participant?.profileName || "Guest",
-      avatarColor: participant?.avatarColor || "#E50914",
-      avatarIcon: participant?.avatarIcon || "smile",
-      text: messageText.trim().slice(0, 500),
-      videoTimestamp: Number(participant?.positionSeconds) || 0,
-      createdAt: Date.now(),
-    });
-    if (room.messages.length > 200) {
-      room.messages = room.messages.slice(-200);
+  } else if (action === "chat") {
+    const trimmed = typeof messageText === "string" ? messageText.trim() : "";
+    const validImage =
+      typeof imageUrl === "string" && imageUrl.startsWith("data:image/")
+        ? imageUrl
+        : null;
+    if (trimmed || validImage) {
+      if (!room.messages) room.messages = [];
+      room.messages.push({
+        id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        participantId: participant?.participantId || "guest",
+        profileId: participant?.profileId || "guest",
+        profileName: participant?.profileName || "Guest",
+        avatarColor: participant?.avatarColor || "#E50914",
+        avatarIcon: participant?.avatarIcon || "smile",
+        text: trimmed.slice(0, 1000),
+        imageUrl: validImage,
+        reactions: {},
+        editedAt: null,
+        videoTimestamp: Number(participant?.positionSeconds) || 0,
+        createdAt: Date.now(),
+      });
+      if (room.messages.length > 200) {
+        room.messages = room.messages.slice(-200);
+      }
+    }
+  } else if (action === "editChat" && typeof messageId === "string" && typeof messageText === "string") {
+    if (room.messages) {
+      const msg = room.messages.find((m) => m.id === messageId);
+      if (
+        msg &&
+        (msg.participantId === participant?.participantId ||
+          msg.profileId === participant?.profileId)
+      ) {
+        const nextText = messageText.trim().slice(0, 1000);
+        if (nextText || msg.imageUrl) {
+          msg.text = nextText;
+          msg.editedAt = Date.now();
+        }
+      }
+    }
+  } else if (action === "deleteChat" && typeof messageId === "string") {
+    if (room.messages) {
+      room.messages = room.messages.filter(
+        (m) =>
+          m.id !== messageId ||
+          (m.participantId !== participant?.participantId &&
+            m.profileId !== participant?.profileId)
+      );
+    }
+  } else if (
+    action === "reactChat" &&
+    typeof messageId === "string" &&
+    typeof emoji === "string" &&
+    emoji.trim()
+  ) {
+    if (room.messages) {
+      const msg = room.messages.find((m) => m.id === messageId);
+      if (msg) {
+        if (!msg.reactions) msg.reactions = {};
+        const key = emoji.trim();
+        const existingList = msg.reactions[key] || [];
+        const pid = participant?.profileId || participant?.participantId || "guest";
+        const pname = participant?.profileName || "Guest";
+        const alreadyIdx = existingList.findIndex((r) => r.profileId === pid);
+        if (alreadyIdx !== -1) {
+          existingList.splice(alreadyIdx, 1);
+          if (existingList.length === 0) {
+            delete msg.reactions[key];
+          } else {
+            msg.reactions[key] = existingList;
+          }
+        } else {
+          msg.reactions[key] = [...existingList, { profileId: pid, profileName: pname }];
+        }
+      }
     }
   }
 
