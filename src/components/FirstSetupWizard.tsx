@@ -3,7 +3,11 @@
 import React, { useState } from "react";
 import { Profile } from "@/types/ownflix";
 import AvatarPicker from "./AvatarPicker";
-import { renderProfileIcon, AVATAR_COLORS } from "./ProfileGate";
+import {
+  renderProfileIcon,
+  AVATAR_COLORS,
+  AVATAR_COLOR_PALETTE,
+} from "./ProfileGate";
 import {
   generateFunnyName,
   generateFunnyNameSuggestions,
@@ -185,18 +189,23 @@ export default function FirstSetupWizard({
                     <span>Avatar Color</span>
                   </label>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {AVATAR_COLORS.map((c) => (
+                    {AVATAR_COLOR_PALETTE.map((c) => (
                       <button
-                        key={c}
+                        key={c.hex}
                         type="button"
-                        onClick={() => setAvatarColor(c)}
-                        className={`w-7 h-7 rounded-full transition-transform ${
-                          avatarColor === c
+                        onClick={() => setAvatarColor(c.hex)}
+                        title={c.name}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform ${
+                          avatarColor === c.hex
                             ? "ring-2 ring-white scale-110"
                             : "opacity-75 hover:opacity-100"
                         }`}
-                        style={{ backgroundColor: c }}
-                      />
+                        style={{ backgroundColor: c.hex }}
+                      >
+                        {avatarColor === c.hex && (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                        )}
+                      </button>
                     ))}
                   </div>
                 </div>

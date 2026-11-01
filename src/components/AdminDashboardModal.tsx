@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { MediaItem, LibraryFolder, ActivityLogItem } from "@/types/ownflix";
-import { renderProfileIcon, AVATAR_COLORS } from "@/components/ProfileGate";
+import {
+  renderProfileIcon,
+  AVATAR_COLORS,
+  AVATAR_COLOR_PALETTE,
+} from "@/components/ProfileGate";
 import AvatarPicker from "@/components/AvatarPicker";
 import {
   generateFunnyName,
@@ -2357,17 +2361,18 @@ export default function AdminDashboardModal({
                       <span>Avatar Color</span>
                     </label>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {AVATAR_COLORS.map((c) => (
+                      {AVATAR_COLOR_PALETTE.map((c) => (
                         <button
-                          key={c}
+                          key={c.hex}
                           type="button"
-                          onClick={() => setNewProfileColor(c)}
+                          onClick={() => setNewProfileColor(c.hex)}
+                          title={c.name}
                           className={`w-6 h-6 rounded-full transition-transform ${
-                            newProfileColor === c
+                            newProfileColor === c.hex
                               ? "ring-2 ring-white scale-110"
                               : "opacity-75 hover:opacity-100"
                           }`}
-                          style={{ backgroundColor: c }}
+                          style={{ backgroundColor: c.hex }}
                         />
                       ))}
                     </div>
@@ -2624,17 +2629,18 @@ export default function AdminDashboardModal({
                       <span>Avatar Color</span>
                     </label>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {AVATAR_COLORS.map((c) => (
+                      {AVATAR_COLOR_PALETTE.map((c) => (
                         <button
-                          key={c}
+                          key={c.hex}
                           type="button"
-                          onClick={() => setEditProfileColor(c)}
+                          onClick={() => setEditProfileColor(c.hex)}
+                          title={c.name}
                           className={`w-6 h-6 rounded-full transition-transform ${
-                            editProfileColor === c
+                            editProfileColor === c.hex
                               ? "ring-2 ring-white scale-110"
                               : "opacity-75 hover:opacity-100"
                           }`}
-                          style={{ backgroundColor: c }}
+                          style={{ backgroundColor: c.hex }}
                         />
                       ))}
                     </div>

@@ -2,7 +2,12 @@
 
 import React, { useState } from "react";
 import { Profile } from "@/types/ownflix";
-import { AVATAR_ICONS, renderProfileIcon } from "./ProfileGate";
+import {
+  AVATAR_ICONS,
+  renderProfileIcon,
+  AVATAR_COLORS,
+  AVATAR_COLOR_PALETTE,
+} from "./ProfileGate";
 import AvatarPicker from "./AvatarPicker";
 import {
   generateFunnyProfileName,
@@ -20,15 +25,6 @@ import {
   Dices,
   RefreshCw,
 } from "lucide-react";
-
-const AVATAR_COLORS = [
-  "#2563EB",
-  "#0071EB",
-  "#10B981",
-  "#F59E0B",
-  "#8B5CF6",
-  "#EC4899",
-];
 
 interface ProfileAccountModalProps {
   profile: Profile;
@@ -260,20 +256,21 @@ export default function ProfileAccountModal({
           <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-2">
             Avatar Color
           </label>
-          <div className="flex items-center gap-2.5">
-            {AVATAR_COLORS.map((c) => (
+          <div className="flex items-center gap-2 flex-wrap">
+            {AVATAR_COLOR_PALETTE.map((c) => (
               <button
-                key={c}
+                key={c.hex}
                 type="button"
-                onClick={() => setAvatarColor(c)}
+                onClick={() => setAvatarColor(c.hex)}
+                title={c.name}
                 className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform ${
-                  avatarColor === c
+                  avatarColor === c.hex
                     ? "scale-110 ring-2 ring-white"
                     : "opacity-75 hover:opacity-100"
                 }`}
-                style={{ backgroundColor: c }}
+                style={{ backgroundColor: c.hex }}
               >
-                {avatarColor === c && (
+                {avatarColor === c.hex && (
                   <Check className="w-3.5 h-3.5 text-white" />
                 )}
               </button>

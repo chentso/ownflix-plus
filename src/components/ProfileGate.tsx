@@ -11,6 +11,8 @@ import {
   AVATAR_ICONS,
   AVATAR_EMBLEMS,
   AVATAR_EMOJIS,
+  AVATAR_COLORS,
+  AVATAR_COLOR_PALETTE,
 } from "@/lib/avatarCatalog";
 import AvatarPicker from "./AvatarPicker";
 import {
@@ -40,6 +42,8 @@ export {
   AVATAR_ICONS,
   AVATAR_EMBLEMS,
   AVATAR_EMOJIS,
+  AVATAR_COLORS,
+  AVATAR_COLOR_PALETTE,
 };
 
 interface ProfileGateProps {
@@ -48,15 +52,6 @@ interface ProfileGateProps {
   onForgetProfile?: (profileId: string) => void;
   onProfilesChanged: () => Promise<void>;
 }
-
-export const AVATAR_COLORS = [
-  "#2563EB", // Royal Blue
-  "#0071EB", // Electric Blue
-  "#10B981", // Emerald Green
-  "#F59E0B", // Amber Gold
-  "#8B5CF6", // Vivid Purple
-  "#EC4899", // Neon Pink
-];
 
 export default function ProfileGate({
   profiles,
@@ -719,21 +714,22 @@ export default function ProfileGate({
               <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-2">
                 Avatar Color
               </label>
-              <div className="flex items-center gap-3">
-                {AVATAR_COLORS.map((color) => (
+              <div className="flex items-center gap-2 flex-wrap">
+                {AVATAR_COLOR_PALETTE.map((c) => (
                   <button
-                    key={color}
+                    key={c.hex}
                     type="button"
-                    onClick={() => setAvatarColor(color)}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${
-                      avatarColor === color
+                    onClick={() => setAvatarColor(c.hex)}
+                    title={c.name}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform ${
+                      avatarColor === c.hex
                         ? "scale-110 ring-2 ring-white"
                         : "opacity-75 hover:opacity-100"
                     }`}
-                    style={{ backgroundColor: color }}
+                    style={{ backgroundColor: c.hex }}
                   >
-                    {avatarColor === color && (
-                      <Check className="w-4 h-4 text-white" />
+                    {avatarColor === c.hex && (
+                      <Check className="w-3.5 h-3.5 text-white" />
                     )}
                   </button>
                 ))}

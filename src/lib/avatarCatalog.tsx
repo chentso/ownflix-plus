@@ -466,6 +466,40 @@ export const ALL_AVATAR_ITEMS: AvatarItem[] = [
   ...AVATAR_EMOJIS,
 ];
 
+export interface AvatarColorItem {
+  hex: string;
+  name: string;
+}
+
+export const AVATAR_COLOR_PALETTE: AvatarColorItem[] = [
+  { hex: "#2563EB", name: "Royal Blue" },
+  { hex: "#0071EB", name: "Electric Blue" },
+  { hex: "#0284C7", name: "Ocean Sky" },
+  { hex: "#0D9488", name: "Deep Teal" },
+  { hex: "#059669", name: "Jade Green" },
+  { hex: "#10B981", name: "Emerald" },
+  { hex: "#16A34A", name: "Leaf Green" },
+  { hex: "#65A30D", name: "Lime Glow" },
+  { hex: "#EAB308", name: "Sunflower Yellow" },
+  { hex: "#F59E0B", name: "Amber Gold" },
+  { hex: "#F97316", name: "Sunset Orange" },
+  { hex: "#EA580C", name: "Burnt Tangerine" },
+  { hex: "#E11D48", name: "Crimson Rose" },
+  { hex: "#F43F5E", name: "Vivid Coral" },
+  { hex: "#EC4899", name: "Neon Pink" },
+  { hex: "#D946EF", name: "Bright Fuchsia" },
+  { hex: "#A855F7", name: "Mystic Violet" },
+  { hex: "#8B5CF6", name: "Vivid Purple" },
+  { hex: "#6366F1", name: "Indigo Night" },
+  { hex: "#3B82F6", name: "Bright Blue" },
+  { hex: "#1E3A8A", name: "Midnight Navy" },
+  { hex: "#475569", name: "Slate Steel" },
+  { hex: "#334155", name: "Dark Slate" },
+  { hex: "#78350F", name: "Warm Bronze" },
+];
+
+export const AVATAR_COLORS: string[] = AVATAR_COLOR_PALETTE.map((c) => c.hex);
+
 // Preserves backward compatibility for files importing AVATAR_ICONS
 export const AVATAR_ICONS = AVATAR_EMBLEMS;
 
