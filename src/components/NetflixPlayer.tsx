@@ -1807,99 +1807,52 @@ export default function NetflixPlayer({
       >
         {/* WATCH TOGETHER AVATAR PROGRESS MINIMAP (Visible when in a Watch Together Room) */}
         {room && (
-          <div className="mb-5 bg-zinc-900/90 border border-zinc-700/80 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-3">
-              <div className="flex items-center gap-2">
-                <Flag className="w-3.5 h-3.5 text-[#E50914]" />
-                <span className="text-zinc-200">
-                  Watch Together Minimap •{" "}
-                  {room.mode === "PACE_SYNC"
-                    ? "Pace Sync Catch-Up (1.25x / 1.4x / 1.0x)"
-                    : "All-Pause Sync"}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleCopyShareUrl}
-                  className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+          <div className="mb-4 relative h-8 bg-zinc-950/90 border border-zinc-800 rounded-full flex items-center px-3 overflow-visible shadow-xl backdrop-blur-md">
+            {/* Dashed center track line */}
+            <div className="w-full border-t-2 border-dashed border-zinc-700/70" />
+
+            {/* Finish Line Flag on the right */}
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center text-zinc-500">
+              <Flag className="w-3.5 h-3.5 text-white" />
+            </div>
+
+            {/* Participant Avatars along the track */}
+            {roomParticipants.map((p) => {
+              const dur = duration || knownDuration || 600;
+              const pct = Math.min(
+                97,
+                Math.max(2, (p.positionSeconds / dur) * 100)
+              );
+              const isMe = p.participantId === participantIdRef.current;
+
+              return (
+                <div
+                  key={p.participantId}
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-500 flex items-center justify-center"
+                  style={{
+                    left: `${pct}%`,
+                    zIndex: isMe ? 30 : 20 - p.rank,
+                  }}
                 >
-                  <Copy className="w-3 h-3" />
-                  <span>{copiedLink ? "Link Copied!" : `Room #${room.id.toUpperCase()}`}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Minimap Track Bar */}
-            <div className="relative h-8 bg-zinc-950 border border-zinc-800 rounded-full flex items-center px-3 overflow-visible">
-              {/* Dashed center track line */}
-              <div className="w-full border-t-2 border-dashed border-zinc-700/70" />
-
-              {/* Finish Line Flag on the right */}
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-zinc-500">
-                <Flag className="w-4 h-4 text-white" />
-              </div>
-
-              {/* Participant Avatars along the track */}
-              {roomParticipants.map((p) => {
-                const dur = duration || knownDuration || 600;
-                const pct = Math.min(
-                  96,
-                  Math.max(2, (p.positionSeconds / dur) * 100)
-                );
-                const isMe = p.participantId === participantIdRef.current;
-
-                return (
+                  {/* Profile Avatar Token */}
                   <div
-                    key={p.participantId}
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-500 flex flex-col items-center"
+                    className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform ${
+                      isMe
+                        ? "ring-2 ring-white scale-110"
+                        : "ring-1 ring-zinc-400"
+                    } ${p.playbackRate > 1.3 ? "animate-pulse" : ""}`}
                     style={{
-                      left: `${pct}%`,
-                      zIndex: isMe ? 30 : 20 - p.rank,
+                      background: `linear-gradient(145deg, ${p.avatarColor}, #111111 150%)`,
                     }}
+                    title={`${p.profileName} (${formatTime(
+                      p.positionSeconds
+                    )} @ ${p.playbackRate}x)`}
                   >
-                    {/* Floating Name + Speed Badge above Avatar */}
-                    <div className="mb-1 px-1.5 py-0.5 rounded bg-black/90 border border-zinc-700 text-[10px] font-bold whitespace-nowrap flex items-center gap-1 shadow-md -mt-8">
-                      <span className="text-amber-400">
-                        {formatOrdinal(p.rank)}
-                      </span>
-                      <span className="text-white">{p.profileName}</span>
-                      <span
-                        className={
-                          p.playbackRate > 1.3
-                            ? "text-[#E50914]"
-                            : p.playbackRate < 1.1 && room.mode === "PACE_SYNC"
-                            ? "text-sky-400"
-                            : "text-emerald-400"
-                        }
-                      >
-                        {p.isBuffering
-                          ? "⏳"
-                          : p.isPaused
-                          ? "⏸"
-                          : `${p.playbackRate}x`}
-                      </span>
-                    </div>
-
-                    {/* Profile Avatar Token */}
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform ${
-                        isMe
-                          ? "ring-2 ring-white scale-110"
-                          : "ring-1 ring-zinc-400"
-                      } ${p.playbackRate > 1.3 ? "animate-pulse" : ""}`}
-                      style={{
-                        background: `linear-gradient(145deg, ${p.avatarColor}, #111111 150%)`,
-                      }}
-                      title={`${p.profileName} (${formatTime(
-                        p.positionSeconds
-                      )} @ ${p.playbackRate}x)`}
-                    >
-                      {renderProfileIcon(p.avatarIcon, "w-4 h-4 text-white")}
-                    </div>
+                    {renderProfileIcon(p.avatarIcon, "w-4 h-4 text-white")}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
