@@ -451,14 +451,6 @@ function detectInitialAutoQuality(): EffectiveQuality {
       if (conn.effectiveType === "slow-2g" || conn.effectiveType === "2g") {
         return "360p";
       }
-      if (conn.effectiveType === "3g") {
-        return "480p";
-      }
-      if (typeof conn.downlink === "number" && conn.downlink > 0) {
-        if (conn.downlink < 1.0) return "360p";
-        if (conn.downlink < 2.2) return "480p";
-        if (conn.downlink < 5.0) return "720p";
-      }
     }
   }
   return "original";
@@ -539,7 +531,7 @@ export default function NetflixPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrubBarRef = useRef<HTMLDivElement>(null);
   const hideControlsTimer = useRef<NodeJS.Timeout | null>(null);
-  const stallCountRef = useRef<number>(0);
+  const bufferingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Unique participant session ID per tab so multiple tabs can join the same room
   const participantIdRef = useRef<string>(
@@ -1240,33 +1232,21 @@ export default function NetflixPlayer({
     [currentTime, isContainerPiped]
   );
 
-  // Auto-Adaptive step-down if video stalls repeatedly on a slow connection
-  const handleVideoWaiting = useCallback(() => {
-    setIsBuffering(true);
-    if (qualityMode !== "auto") return;
-    stallCountRef.current += 1;
-    if (stallCountRef.current < 2) return;
-    stallCountRef.current = 0;
-
-    const ladder: EffectiveQuality[] = [
-      "original",
-      "1080p",
-      "720p",
-      "480p",
-      "360p",
-    ];
-    const idx = ladder.indexOf(autoEffectiveQuality);
-    if (idx !== -1 && idx + 1 < ladder.length) {
-      const nextQual = ladder[idx + 1];
-      setBufferedEnd(0);
-      setStreamOffset(Math.floor(currentTime));
-      setAutoEffectiveQuality(nextQual);
-      setAdaptiveBanner(
-        `Slow connection detected — switched to ${nextQual} transcoding for smooth playback.`
-      );
-      setTimeout(() => setAdaptiveBanner(null), 5000);
+  // Debounced buffering indicator without restarting the video stream
+  const clearBufferingState = useCallback(() => {
+    if (bufferingTimerRef.current) {
+      clearTimeout(bufferingTimerRef.current);
+      bufferingTimerRef.current = null;
     }
-  }, [qualityMode, autoEffectiveQuality, currentTime]);
+    setIsBuffering(false);
+  }, []);
+
+  const handleVideoWaiting = useCallback(() => {
+    if (bufferingTimerRef.current) clearTimeout(bufferingTimerRef.current);
+    bufferingTimerRef.current = setTimeout(() => {
+      setIsBuffering(true);
+    }, 280);
+  }, []);
 
   // Intro & Credits timestamps
   const introStart = currentEpisode
@@ -1733,9 +1713,11 @@ export default function NetflixPlayer({
         }}
         onLoadedMetadata={handleLoadedMetadata}
         onWaiting={handleVideoWaiting}
-        onPlaying={() => setIsBuffering(false)}
-        onCanPlay={() => setIsBuffering(false)}
+        onPlaying={clearBufferingState}
+        onCanPlay={clearBufferingState}
+        onCanPlayThrough={clearBufferingState}
         onTimeUpdate={(e) => {
+          if (isBuffering) clearBufferingState();
           if (isScrubbing) return;
           const v = e.currentTarget;
           const actual = isPipedStream
@@ -1748,7 +1730,7 @@ export default function NetflixPlayer({
         }}
         onPlay={() => {
           setIsPlaying(true);
-          setIsBuffering(false);
+          clearBufferingState();
           if (isRemoteSyncActionRef.current) {
             isRemoteSyncActionRef.current = false;
           }
@@ -1864,17 +1846,36 @@ export default function NetflixPlayer({
         </div>
       </div>
 
+      {/* Compact Modern Buffering Pill & Watch Together Status */}
+      {isBuffering && (
+        <div className="pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30">
+          <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.6)]">
+            <div className="relative w-3.5 h-3.5 flex items-center justify-center">
+              <span className="absolute inset-0 rounded-full border-2 border-[#3B82F6]/25" />
+              <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#3B82F6] animate-spin" />
+            </div>
+            <span className="text-[11px] font-semibold tracking-wide text-zinc-200">
+              Buffering...
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Watch Together All-Pause Status Banner */}
       {room &&
         room.mode === "ALL_PAUSE" &&
         (!room.isPlaying || room.bufferingProfileName) && (
           <div className="relative z-20 mx-auto px-4 pointer-events-none">
-            <div className="bg-black/85 border border-amber-500/70 text-amber-200 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full shadow-2xl flex items-center gap-2">
-              <Pause className="w-4 h-4 text-amber-400 fill-amber-400" />
+            <div className="bg-zinc-950/80 backdrop-blur-md border border-white/10 text-zinc-200 text-xs font-medium px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+              {room.bufferingProfileName ? (
+                <span className="w-3 h-3 rounded-full border-2 border-zinc-500 border-t-[#3B82F6] animate-spin" />
+              ) : (
+                <Pause className="w-3.5 h-3.5 text-[#3B82F6] fill-[#3B82F6]" />
+              )}
               <span>
                 {room.bufferingProfileName
-                  ? `All Paused: Waiting for ${room.bufferingProfileName} (buffering)...`
-                  : `All Paused by ${room.pausedByProfileName || "viewer"}`}
+                  ? `Waiting for ${room.bufferingProfileName}...`
+                  : `Paused by ${room.pausedByProfileName || "viewer"}`}
               </span>
             </div>
           </div>
