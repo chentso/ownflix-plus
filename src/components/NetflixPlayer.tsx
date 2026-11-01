@@ -1885,28 +1885,6 @@ export default function NetflixPlayer({
             <span>Speed: {playbackSpeed}x</span>
           </button>
 
-          {/* Watch Together Button */}
-          <button
-            onClick={() =>
-              setActivePopover((p) => (p === "room" ? "none" : "room"))
-            }
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors ${
-              room
-                ? "bg-emerald-600 border-emerald-500 text-white shadow-lg"
-                : "bg-zinc-800/85 hover:bg-zinc-700 border-zinc-600 text-zinc-100"
-            }`}
-            title="Watch Together Room"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>
-              {room
-                ? `Room #${room.id.toUpperCase()} (${
-                    roomParticipants.length
-                  } watching)`
-                : "Watch Together"}
-            </span>
-          </button>
-
           <button
             onClick={() =>
               setActivePopover((p) => (p === "quality" ? "none" : "quality"))
@@ -2032,7 +2010,7 @@ export default function NetflixPlayer({
       {activePopover === "room" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 top-20 z-40 bg-[#181818] border border-zinc-700 rounded-xl p-5 shadow-2xl w-[350px] sm:w-[430px]"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-xl p-5 shadow-2xl w-[350px] sm:w-[430px]"
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -2713,7 +2691,7 @@ export default function NetflixPlayer({
               onClick={() =>
                 setActivePopover((p) => (p === "room" ? "none" : "room"))
               }
-              className={`hover:text-white transition-colors flex items-center gap-1 ${
+              className={`hover:text-white transition-colors flex items-center gap-1.5 ${
                 activePopover === "room" || room
                   ? "text-emerald-400"
                   : "text-white"
@@ -2721,6 +2699,11 @@ export default function NetflixPlayer({
               title="Watch Together Room"
             >
               <Users className="w-6 h-6" />
+              {room && (
+                <span className="text-xs font-bold">
+                  #{room.id.toUpperCase()} ({roomParticipants.length})
+                </span>
+              )}
             </button>
 
             <button
