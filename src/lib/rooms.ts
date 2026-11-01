@@ -15,6 +15,18 @@ export interface RoomParticipant {
   updatedAt: number;
 }
 
+export interface RoomChatMessage {
+  id: string;
+  participantId: string;
+  profileId: string;
+  profileName: string;
+  avatarColor: string;
+  avatarIcon: string;
+  text: string;
+  videoTimestamp: number;
+  createdAt: number;
+}
+
 export interface WatchRoom {
   id: string;
   mediaItemId: string;
@@ -27,6 +39,7 @@ export interface WatchRoom {
   lastSeekTime: number;
   createdAt: number;
   participants: Record<string, RoomParticipant>;
+  messages: RoomChatMessage[];
 }
 
 const globalForRooms = globalThis as unknown as {

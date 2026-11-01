@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
     mode,
     participant,
     seekTime,
+    messageText,
   } = body;
 
   const store = getRoomsStore();
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest) {
       lastSeekTime: 0,
       createdAt: Date.now(),
       participants: {},
+      messages: [],
     };
 
     if (participant && participant.participantId) {
@@ -174,6 +176,22 @@ export async function POST(req: NextRequest) {
     if (room.mode === "ALL_PAUSE") {
       room.lastSeekSeq += 1;
       room.lastSeekTime = seekTime;
+    }
+  } else if (action === "chat" && typeof messageText === "string" && messageText.trim()) {
+    if (!room.messages) room.messages = [];
+    room.messages.push({
+      id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      participantId: participant?.participantId || "guest",
+      profileId: participant?.profileId || "guest",
+      profileName: participant?.profileName || "Guest",
+      avatarColor: participant?.avatarColor || "#E50914",
+      avatarIcon: participant?.avatarIcon || "smile",
+      text: messageText.trim().slice(0, 500),
+      videoTimestamp: Number(participant?.positionSeconds) || 0,
+      createdAt: Date.now(),
+    });
+    if (room.messages.length > 200) {
+      room.messages = room.messages.slice(-200);
     }
   }
 

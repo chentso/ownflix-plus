@@ -28,6 +28,8 @@ import {
   Zap,
   Flame,
   X,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 
 interface NetflixPlayerProps {
@@ -230,12 +232,27 @@ export default function NetflixPlayer({
     }
   );
 
-  // Watch Together Room State
+  // Watch Together Room & Docked Chat State
   const [roomId, setRoomId] = useState<string | null>(initialRoomId);
   const [room, setRoom] = useState<WatchRoom | null>(null);
   const [isBuffering, setIsBuffering] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
+  const [chatText, setChatText] = useState("");
+  const [localMessages, setLocalMessages] = useState<
+    {
+      id: string;
+      participantId: string;
+      profileId: string;
+      profileName: string;
+      avatarColor: string;
+      avatarIcon: string;
+      text: string;
+      videoTimestamp: number;
+      createdAt: number;
+    }[]
+  >([]);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Quality mode state
   const [qualityMode, setQualityMode] = useState<StreamQualityMode>(() => {
@@ -550,6 +567,68 @@ export default function NetflixPlayer({
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
   };
+
+  // Send Chat Message (in active room or local notes)
+  const handleSendChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = chatText.trim();
+    if (!trimmed) return;
+    setChatText("");
+
+    if (roomId) {
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "chat",
+          roomId,
+          messageText: trimmed,
+          participant: {
+            participantId: participantIdRef.current,
+            profileId: activeProfile.id,
+            profileName: activeProfile.name,
+            avatarColor: activeProfile.avatarColor,
+            avatarIcon: activeProfile.avatarIcon,
+            positionSeconds: currentTime,
+            durationSeconds: duration || knownDuration,
+            isPaused: !isPlaying,
+            isBuffering,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.room) {
+        setRoom(data.room);
+      }
+    } else {
+      setLocalMessages((prev) => [
+        ...prev,
+        {
+          id: `local-${Date.now()}`,
+          participantId: participantIdRef.current,
+          profileId: activeProfile.id,
+          profileName: activeProfile.name,
+          avatarColor: activeProfile.avatarColor,
+          avatarIcon: activeProfile.avatarIcon,
+          text: trimmed,
+          videoTimestamp: currentTime,
+          createdAt: Date.now(),
+        },
+      ]);
+    }
+  };
+
+  const displayedMessages = useMemo(
+    () => (room ? room.messages || [] : localMessages),
+    [room, localMessages]
+  );
+
+  // Auto-scroll chat sidebar on new messages
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [displayedMessages.length]);
 
   // Real-time Watch Together Room Heartbeat & Sync Loop (every 800ms)
   useEffect(() => {
@@ -1032,6 +1111,15 @@ export default function NetflixPlayer({
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
       if (e.key === "Escape") {
         if (activePopover !== "none") {
           setActivePopover("none");
@@ -1150,9 +1238,11 @@ export default function NetflixPlayer({
     <div
       ref={containerRef}
       onMouseMove={revealControls}
-      className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden select-none"
+      className="fixed inset-0 z-50 bg-black flex overflow-hidden select-none"
     >
-      {/* HTML5 Video Element */}
+      {/* Left / Main Video Area */}
+      <div className="relative flex-1 h-full flex flex-col justify-between overflow-hidden bg-black">
+        {/* HTML5 Video Element */}
       <video
         ref={videoRef}
         key={`${streamUrl}-${currentEpisode?.id || "movie"}`}
@@ -2109,6 +2199,188 @@ export default function NetflixPlayer({
           </div>
         </div>
       </div>
+      </div>
+
+      {/* Permanent Docked Right Chat Sidebar */}
+      <aside
+        onClick={(e) => e.stopPropagation()}
+        className="w-80 md:w-88 lg:w-96 h-full bg-[#121212] border-l border-zinc-800 flex flex-col shrink-0 z-30 select-text"
+      >
+        {/* Sidebar Header */}
+        <div className="px-4 py-3.5 border-b border-zinc-800 bg-[#161616] flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare className="w-4 h-4 text-[#E50914] shrink-0" />
+            <span className="font-bold text-sm text-white truncate">
+              {room ? `Room #${room.id.toUpperCase()} Chat` : "Live Stream Chat"}
+            </span>
+          </div>
+
+          {room ? (
+            <button
+              onClick={handleCopyShareUrl}
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-emerald-400 px-2.5 py-1 rounded transition-colors shrink-0"
+              title="Copy Watch Together Invite Link"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Invite</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={() => handleCreateRoom("PACE_SYNC")}
+              disabled={creatingRoom}
+              className="flex items-center gap-1.5 bg-[#E50914] hover:bg-[#f6121d] text-white text-xs font-bold px-2.5 py-1 rounded transition-colors shrink-0"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Start Room</span>
+            </button>
+          )}
+        </div>
+
+        {/* Active Room Mode & Participants Strip */}
+        {room && (
+          <div className="px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-zinc-400 font-semibold">
+                Mode:{" "}
+                <strong className="text-white">
+                  {room.mode === "PACE_SYNC"
+                    ? "Pace Sync (1.25x)"
+                    : "All-Pause Sync"}
+                </strong>
+              </span>
+              <button
+                onClick={() =>
+                  handleSetRoomMode(
+                    room.mode === "PACE_SYNC" ? "ALL_PAUSE" : "PACE_SYNC"
+                  )
+                }
+                className="text-[#E50914] hover:underline font-semibold"
+              >
+                Switch Mode
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              {roomParticipants.map((p) => (
+                <div
+                  key={p.participantId}
+                  className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-full pl-1 pr-2 py-0.5 text-[11px] shrink-0"
+                  title={`${p.profileName} @ ${formatTime(p.positionSeconds)} (${p.playbackRate}x)`}
+                >
+                  <div
+                    className="w-4 h-4 rounded-full flex items-center justify-center"
+                    style={{
+                      background: `linear-gradient(145deg, ${p.avatarColor}, #111111 150%)`,
+                    }}
+                  >
+                    {renderProfileIcon(p.avatarIcon, "w-2.5 h-2.5 text-white")}
+                  </div>
+                  <span className="text-zinc-200 font-medium max-w-[75px] truncate">
+                    {p.profileName}
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400">
+                    {p.playbackRate}x
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Messages Feed */}
+        <div
+          ref={chatScrollRef}
+          className="flex-1 overflow-y-auto p-4 space-y-3"
+        >
+          {displayedMessages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center px-4 text-zinc-500">
+              <MessageSquare className="w-8 h-8 mb-2 text-zinc-700" />
+              <p className="text-xs font-medium text-zinc-400 mb-1">
+                No messages yet
+              </p>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                {room
+                  ? "Say hello to everyone watching in this room!"
+                  : "Send a timestamped reaction or click 'Start Room' above to invite friends with a share link."}
+              </p>
+            </div>
+          ) : (
+            displayedMessages.map((msg) => {
+              const isOwn = msg.participantId === participantIdRef.current;
+              return (
+                <div
+                  key={msg.id}
+                  className="flex items-start gap-2.5 text-xs group"
+                >
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow"
+                    style={{
+                      background: `linear-gradient(145deg, ${msg.avatarColor}, #111111 150%)`,
+                    }}
+                  >
+                    {renderProfileIcon(msg.avatarIcon, "w-4 h-4 text-white")}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className={`font-bold truncate ${
+                          isOwn ? "text-white" : "text-zinc-200"
+                        }`}
+                      >
+                        {msg.profileName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => seekTo(msg.videoTimestamp)}
+                        className="text-[10px] font-mono text-zinc-500 hover:text-[#E50914] transition-colors"
+                        title="Jump to this video timestamp"
+                      >
+                        {formatTime(msg.videoTimestamp)}
+                      </button>
+                    </div>
+                    <p className="text-zinc-300 break-words leading-relaxed mt-0.5">
+                      {msg.text}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Chat Input Box */}
+        <form
+          onSubmit={handleSendChat}
+          className="p-3 border-t border-zinc-800 bg-[#161616] flex items-center gap-2"
+        >
+          <input
+            type="text"
+            value={chatText}
+            onChange={(e) => setChatText(e.target.value)}
+            placeholder={
+              room ? "Send a message to room..." : "Write a chat message..."
+            }
+            className="flex-1 bg-zinc-900 border border-zinc-700/80 focus:border-[#E50914] rounded-full px-3.5 py-2 text-xs text-white placeholder-zinc-500 outline-none transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={!chatText.trim()}
+            className="w-8 h-8 rounded-full bg-[#E50914] hover:bg-[#f6121d] disabled:opacity-40 text-white flex items-center justify-center shrink-0 transition-colors"
+            title="Send Message"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </form>
+      </aside>
     </div>
   );
 }
