@@ -2677,9 +2677,9 @@ export default function NetflixPlayer({
           )}
         </div>
 
-        {/* Active Room Mode & Participants Strip */}
+        {/* Active Room Mode, Compact Avatar Minimap & Participants Strip */}
         {room && (
-          <div className="px-4 py-3 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2">
+          <div className="px-4 py-3 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-zinc-400 font-semibold">
                 Mode:{" "}
@@ -2699,6 +2699,52 @@ export default function NetflixPlayer({
               >
                 Switch Mode
               </button>
+            </div>
+
+            {/* Compact Avatar Minimap Track inside Chat Sidebar */}
+            <div className="relative h-6 bg-zinc-950 border border-zinc-800 rounded-full flex items-center px-2.5 overflow-visible">
+              {/* Dashed center track line */}
+              <div className="w-full border-t border-dashed border-zinc-700/70" />
+
+              {/* Participant Avatars along the mini track */}
+              {roomParticipants.map((p) => {
+                const dur = duration || knownDuration || 600;
+                const pct = Math.min(
+                  96,
+                  Math.max(4, (p.positionSeconds / dur) * 100)
+                );
+                const isMe = p.participantId === participantIdRef.current;
+
+                return (
+                  <div
+                    key={`chat-minimap-${p.participantId}`}
+                    className="group/mini absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-500 flex items-center justify-center cursor-pointer"
+                    style={{
+                      left: `${pct}%`,
+                      zIndex: isMe ? 30 : 20 - p.rank,
+                    }}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center shadow-md transition-transform group-hover/mini:scale-125 ${
+                        isMe
+                          ? "ring-2 ring-white scale-110"
+                          : "ring-1 ring-zinc-400"
+                      }`}
+                      style={{
+                        background: `linear-gradient(145deg, ${p.avatarColor}, #111111 150%)`,
+                      }}
+                    >
+                      {renderProfileIcon(p.avatarIcon, "w-3 h-3 text-white")}
+                    </div>
+
+                    {/* Hover Tooltip */}
+                    <div className="opacity-0 group-hover/mini:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 rounded bg-black/95 border border-zinc-700 text-[11px] font-semibold text-white whitespace-nowrap pointer-events-none shadow-lg z-40">
+                      {p.profileName} • {formatTime(p.positionSeconds)} (
+                      {p.playbackRate}x)
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
