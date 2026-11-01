@@ -32,6 +32,7 @@ import {
   Image as ImageIcon,
   Pencil,
   Trash2,
+  AudioLines,
 } from "lucide-react";
 
 interface NetflixPlayerProps {
@@ -703,9 +704,9 @@ export default function NetflixPlayer({
     setDuration(knownDuration);
   }, [knownDuration]);
 
-  // Popovers: "none" | "audioSub" | "speed" | "episodes" | "quality" | "room"
+  // Popovers: "none" | "audioSub" | "audioNorm" | "speed" | "episodes" | "quality" | "room"
   const [activePopover, setActivePopover] = useState<
-    "none" | "audioSub" | "speed" | "episodes" | "quality" | "room"
+    "none" | "audioSub" | "audioNorm" | "speed" | "episodes" | "quality" | "room"
   >("none");
 
   const audioOptions = useMemo(
@@ -1315,6 +1316,7 @@ export default function NetflixPlayer({
       }
 
       setAudioNormMode(newNorm);
+      setActivePopover("none");
     },
     [currentTime, isContainerPiped, effectiveQuality]
   );
@@ -1883,30 +1885,6 @@ export default function NetflixPlayer({
             <span>Speed: {playbackSpeed}x</span>
           </button>
 
-          {/* Smart Audio Normalization Quick Button */}
-          <button
-            onClick={() =>
-              setActivePopover((p) => (p === "audioSub" ? "none" : "audioSub"))
-            }
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors ${
-              audioNormMode !== "off"
-                ? "bg-[#2563EB] border-[#3B82F6] text-white shadow-lg"
-                : "bg-black/60 border-zinc-600 text-zinc-200 hover:border-white"
-            }`}
-            title="Smart Audio Normalization & Dialogue Boost"
-          >
-            <Volume2 className="w-3.5 h-3.5" />
-            <span>
-              {audioNormMode === "voice_boost"
-                ? "Voice Boost ON"
-                : audioNormMode === "night_mode"
-                ? "Night Mode ON"
-                : audioNormMode === "loudnorm"
-                ? "Loudness Norm ON"
-                : "Normalize Audio"}
-            </span>
-          </button>
-
           {/* Watch Together Button */}
           <button
             onClick={() =>
@@ -2328,113 +2306,107 @@ export default function NetflixPlayer({
         </div>
       )}
 
-      {activePopover === "audioSub" && (
+      {activePopover === "audioNorm" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-xl p-5 shadow-2xl w-[360px] sm:w-[540px] space-y-5"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96"
         >
-          {/* Smart Audio Normalization & Dialogue Boost Section */}
-          <div className="pb-4 border-b border-zinc-800">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2">
-                <Volume2 className="w-4 h-4 text-[#3B82F6]" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-white">
-                  Smart Audio Normalization Stream
-                </h4>
-              </div>
-              <span className="text-[11px] text-emerald-400 font-semibold">
-                FFmpeg dynaudnorm + Voice EQ
-              </span>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+              Smart Audio Normalization
+            </h4>
+            <span className="text-[11px] text-emerald-400 font-semibold">
+              FFmpeg dynaudnorm + Voice EQ
+            </span>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {AUDIO_NORM_OPTIONS.map((opt) => {
-                const active = audioNormMode === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => handleSelectAudioNorm(opt.id)}
-                    className={`text-left p-2.5 rounded-lg border transition-colors ${
-                      active
-                        ? "bg-[#2563EB]/20 border-[#2563EB] text-white"
-                        : "bg-[#121212] border-zinc-800 text-zinc-300 hover:border-zinc-600"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="text-xs font-bold text-white">
-                        {opt.label}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                          active
-                            ? "bg-[#2563EB] text-white"
-                            : "bg-zinc-800 text-zinc-400"
-                        }`}
-                      >
+          <div className="space-y-1.5">
+            {AUDIO_NORM_OPTIONS.map((opt) => {
+              const selected = audioNormMode === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => handleSelectAudioNorm(opt.id)}
+                  className={`w-full text-left p-2.5 rounded-lg flex items-start justify-between gap-3 transition-colors ${
+                    selected
+                      ? "bg-zinc-800 border border-zinc-600 text-white"
+                      : "hover:bg-zinc-800/60 text-zinc-300 border border-transparent"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold">{opt.label}</span>
+                      <span className="text-[11px] bg-zinc-900 border border-zinc-700 text-zinc-300 px-1.5 py-0.2 rounded">
                         {opt.badge}
                       </span>
                     </div>
-                    <p className="text-[11px] text-zinc-400 leading-snug">
-                      {opt.desc}
-                    </p>
-                  </button>
-                );
-              })}
+                    <p className="text-xs text-zinc-400 mt-0.5">{opt.desc}</p>
+                  </div>
+                  {selected && (
+                    <Check className="w-4 h-4 text-[#2563EB] shrink-0 mt-1" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activePopover === "audioSub" && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818] border border-zinc-700 rounded-lg p-5 shadow-2xl w-[340px] sm:w-[440px] grid grid-cols-2 gap-6"
+        >
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+              Audio
+            </h4>
+            <div className="space-y-1.5">
+              {audioOptions.map((aud) => (
+                <button
+                  key={aud}
+                  onClick={() => setSelectedAudio(aud)}
+                  className={`w-full text-left text-xs sm:text-sm py-1.5 px-2 rounded flex items-center gap-2 ${
+                    selectedAudio === aud
+                      ? "text-white font-bold bg-zinc-800"
+                      : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  <Check
+                    className={`w-4 h-4 shrink-0 ${
+                      selectedAudio === aud ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
+                  <span className="truncate">{aud}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
-                Audio Track
-              </h4>
-              <div className="space-y-1.5">
-                {audioOptions.map((aud) => (
-                  <button
-                    key={aud}
-                    onClick={() => setSelectedAudio(aud)}
-                    className={`w-full text-left text-xs sm:text-sm py-1.5 px-2 rounded flex items-center gap-2 ${
-                      selectedAudio === aud
-                        ? "text-white font-bold bg-zinc-800"
-                        : "text-zinc-400 hover:text-white"
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+              Subtitles
+            </h4>
+            <div className="space-y-1.5">
+              {subtitleOptions.map((sub) => (
+                <button
+                  key={sub}
+                  onClick={() => setSelectedSubtitle(sub)}
+                  className={`w-full text-left text-xs sm:text-sm py-1.5 px-2 rounded flex items-center gap-2 ${
+                    selectedSubtitle === sub
+                      ? "text-white font-bold bg-zinc-800"
+                      : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  <Check
+                    className={`w-4 h-4 shrink-0 ${
+                      selectedSubtitle === sub ? "opacity-100" : "opacity-0"
                     }`}
-                  >
-                    <Check
-                      className={`w-4 h-4 shrink-0 ${
-                        selectedAudio === aud ? "opacity-100" : "opacity-0"
-                      }`}
-                    />
-                    <span className="truncate">{aud}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
-                Subtitles
-              </h4>
-              <div className="space-y-1.5">
-                {subtitleOptions.map((sub) => (
-                  <button
-                    key={sub}
-                    onClick={() => setSelectedSubtitle(sub)}
-                    className={`w-full text-left text-xs sm:text-sm py-1.5 px-2 rounded flex items-center gap-2 ${
-                      selectedSubtitle === sub
-                        ? "text-white font-bold bg-zinc-800"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    <Check
-                      className={`w-4 h-4 shrink-0 ${
-                        selectedSubtitle === sub ? "opacity-100" : "opacity-0"
-                      }`}
-                    />
-                    <span className="truncate">{sub}</span>
-                  </button>
-                ))}
-              </div>
+                  />
+                  <span className="truncate">{sub}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -2749,6 +2721,31 @@ export default function NetflixPlayer({
               title="Watch Together Room"
             >
               <Users className="w-6 h-6" />
+            </button>
+
+            <button
+              onClick={() =>
+                setActivePopover((p) =>
+                  p === "audioNorm" ? "none" : "audioNorm"
+                )
+              }
+              className={`hover:text-white transition-colors flex items-center gap-1 ${
+                activePopover === "audioNorm" || audioNormMode !== "off"
+                  ? "text-[#2563EB]"
+                  : "text-white"
+              }`}
+              title="Smart Audio Normalization & Dialogue Boost"
+            >
+              <AudioLines className="w-6 h-6" />
+              {audioNormMode !== "off" && (
+                <span className="text-xs font-bold">
+                  {audioNormMode === "voice_boost"
+                    ? "Voice"
+                    : audioNormMode === "night_mode"
+                    ? "Night"
+                    : "Norm"}
+                </span>
+              )}
             </button>
 
             <button
