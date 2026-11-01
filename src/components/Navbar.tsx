@@ -16,7 +16,7 @@ import {
   Activity,
 } from "lucide-react";
 
-export type NavCategory = "HOME" | "SERIES" | "MOVIES" | "LOCAL" | "MY_LIST";
+export type NavCategory = "HOME" | "SERIES" | "MOVIES" | "LOCAL" | "MY_LIST" | "PLAYLISTS";
 
 interface NavbarProps {
   activeProfile: Profile;
@@ -81,6 +81,7 @@ export default function Navbar({
     { id: "MOVIES", label: "Movies" },
     { id: "LOCAL", label: "Local Disk" },
     { id: "MY_LIST", label: "My List" },
+    { id: "PLAYLISTS", label: "Playlists" },
   ];
 
   return (

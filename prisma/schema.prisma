@@ -20,6 +20,7 @@ model Profile {
   myList         MyListItem[]
   libraryFolders LibraryFolder[]
   activityLogs   ActivityLog[]
+  playlists      Playlist[]
 }
 
 model LibraryFolder {
@@ -76,6 +77,7 @@ model MediaItem {
   episodes       Episode[]
   watchProgress  WatchProgress[]
   myList         MyListItem[]
+  playlistItems  PlaylistItem[]
 }
 
 model Episode {
@@ -123,4 +125,29 @@ model MyListItem {
   createdAt   DateTime  @default(now())
 
   @@unique([profileId, mediaItemId])
+}
+
+model Playlist {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  isPublic    Boolean        @default(true)
+  shareCode   String         @unique @default(cuid())
+  profileId   String
+  profile     Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  items       PlaylistItem[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model PlaylistItem {
+  id          String     @id @default(cuid())
+  playlistId  String
+  playlist    Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  mediaItemId String
+  mediaItem   MediaItem  @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  order       Int        @default(0)
+  createdAt   DateTime   @default(now())
+
+  @@unique([playlistId, mediaItemId])
 }

@@ -13,6 +13,7 @@ import {
   Pencil,
   RotateCcw,
   Search,
+  ListPlus,
 } from "lucide-react";
 
 interface DetailModalProps {
@@ -24,6 +25,7 @@ interface DetailModalProps {
   onSelectMedia: (item: MediaItem) => void;
   onEditItem: (item: MediaItem) => void;
   onIdentifyItem?: (item: MediaItem) => void;
+  onAddToPlaylist?: (item: MediaItem) => void;
 }
 
 function formatDurationMin(sec: number): string {
@@ -44,6 +46,7 @@ export default function DetailModal({
   onSelectMedia,
   onEditItem,
   onIdentifyItem,
+  onAddToPlaylist,
 }: DetailModalProps) {
   const seasons = useMemo(() => {
     const set = new Set<number>();
@@ -180,6 +183,16 @@ export default function DetailModal({
                   <Plus className="w-5 h-5" />
                 )}
               </button>
+
+              {onAddToPlaylist && (
+                <button
+                  onClick={() => onAddToPlaylist(item)}
+                  className="w-10 h-10 rounded-full border-2 border-zinc-400 hover:border-[#3B82F6] bg-black/50 text-zinc-300 hover:text-[#3B82F6] flex items-center justify-center transition-colors shadow"
+                  title="Add to Custom Playlist"
+                >
+                  <ListPlus className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
         </div>

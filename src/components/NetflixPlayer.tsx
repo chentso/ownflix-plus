@@ -43,6 +43,8 @@ interface NetflixPlayerProps {
   initialRoomId?: string | null;
   onClose: () => void;
   onProgressUpdated: () => void;
+  playlistQueue?: MediaItem[];
+  onPlayNextFromQueue?: (nextItem: MediaItem, remainingQueue: MediaItem[]) => void;
 }
 
 interface CueItem {
@@ -561,6 +563,8 @@ export default function NetflixPlayer({
   initialRoomId = null,
   onClose,
   onProgressUpdated,
+  playlistQueue = [],
+  onPlayNextFromQueue,
 }: NetflixPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1837,6 +1841,8 @@ export default function NetflixPlayer({
           saveProgress(duration, duration, true);
           if (nextEpisode) {
             handlePlayEpisode(nextEpisode);
+          } else if (playlistQueue && playlistQueue.length > 0 && onPlayNextFromQueue) {
+            onPlayNextFromQueue(playlistQueue[0], playlistQueue.slice(1));
           } else {
             setIsPlaying(false);
           }
@@ -2682,7 +2688,7 @@ export default function NetflixPlayer({
 
           {/* Right Controls */}
           <div className="flex items-center gap-4 md:gap-5">
-            {nextEpisode && (
+            {nextEpisode ? (
               <button
                 onClick={() => handlePlayEpisode(nextEpisode)}
                 className="text-white hover:text-zinc-300 flex items-center gap-1.5 text-xs font-semibold"
@@ -2691,7 +2697,16 @@ export default function NetflixPlayer({
                 <SkipForward className="w-6 h-6" />
                 <span className="hidden md:inline">Next Ep</span>
               </button>
-            )}
+            ) : playlistQueue && playlistQueue.length > 0 && onPlayNextFromQueue ? (
+              <button
+                onClick={() => onPlayNextFromQueue(playlistQueue[0], playlistQueue.slice(1))}
+                className="text-white hover:text-zinc-300 flex items-center gap-1.5 text-xs font-semibold"
+                title={`Next in Playlist: ${playlistQueue[0].title}`}
+              >
+                <SkipForward className="w-6 h-6 text-[#3B82F6]" />
+                <span className="hidden md:inline">Next in List</span>
+              </button>
+            ) : null}
 
             {item.type === "SERIES" && item.episodes.length > 0 && (
               <button

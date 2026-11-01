@@ -11,6 +11,8 @@ import NetflixPlayer from "@/components/NetflixPlayer";
 import AdminDashboardModal from "@/components/AdminDashboardModal";
 import ProfileAccountModal from "@/components/ProfileAccountModal";
 import IdentifyMetadataModal from "@/components/IdentifyMetadataModal";
+import PlaylistsView from "@/components/PlaylistsView";
+import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import {
   HardDrive,
   Play,
@@ -26,6 +28,7 @@ import {
   Search,
   RefreshCw,
   SlidersHorizontal,
+  ListPlus,
 } from "lucide-react";
 
 export default function OwnFlixApp() {
@@ -44,8 +47,11 @@ export default function OwnFlixApp() {
     episode?: Episode;
     startFromBeginning?: boolean;
     roomId?: string | null;
+    queue?: MediaItem[];
   } | null>(null);
   const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
+  const [pendingPlaylistCode, setPendingPlaylistCode] = useState<string | null>(null);
+  const [addToPlaylistItem, setAddToPlaylistItem] = useState<MediaItem | null>(null);
 
   const [adminModal, setAdminModal] = useState<{
     open: boolean;
@@ -183,6 +189,11 @@ export default function OwnFlixApp() {
       if (roomCode) {
         setPendingRoomId(roomCode.toUpperCase());
       }
+      const playlistCode = params.get("playlist") || params.get("shareCode");
+      if (playlistCode) {
+        setActiveCategory("PLAYLISTS");
+        setPendingPlaylistCode(playlistCode);
+      }
     }
   }, [fetchProfiles]);
 
@@ -270,11 +281,12 @@ export default function OwnFlixApp() {
   const handlePlay = (
     item: MediaItem,
     episode?: Episode,
-    startFromBeginning = false
+    startFromBeginning = false,
+    queue: MediaItem[] = []
   ) => {
     setDetailItem(null);
     setContextMenu(null);
-    setPlayingState({ item, episode, startFromBeginning });
+    setPlayingState({ item, episode, startFromBeginning, queue });
     if (activeProfile) {
       const epLabel = episode
         ? ` (S${episode.seasonNumber}:E${episode.episodeNumber} "${episode.title}")`
@@ -489,6 +501,15 @@ export default function OwnFlixApp() {
         startFromBeginning={playingState.startFromBeginning}
         initialRoomId={playingState.roomId}
         activeProfile={activeProfile}
+        playlistQueue={playingState.queue || []}
+        onPlayNextFromQueue={(nextItem, remainingQueue) => {
+          setPlayingState({
+            item: nextItem,
+            episode: undefined,
+            startFromBeginning: true,
+            queue: remainingQueue,
+          });
+        }}
         onClose={() => {
           setPlayingState(null);
           if (typeof window !== "undefined") {
@@ -606,6 +627,15 @@ export default function OwnFlixApp() {
             </div>
           )}
         </main>
+      ) : activeCategory === "PLAYLISTS" ? (
+        <PlaylistsView
+          activeProfile={activeProfile}
+          onPlayMedia={(item, queue) => {
+            handlePlay(item, undefined, false, queue);
+          }}
+          onSelectMediaDetails={(item) => setDetailItem(item)}
+          initialShareCode={pendingPlaylistCode}
+        />
       ) : activeCategory === "MY_LIST" || activeCategory === "LOCAL" ? (
         <main className="pt-28 px-4 md:px-12">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -842,6 +872,7 @@ export default function OwnFlixApp() {
             setDetailItem(null);
             setIdentifyItem(item);
           }}
+          onAddToPlaylist={(item) => setAddToPlaylistItem(item)}
         />
       )}
 
@@ -922,6 +953,17 @@ export default function OwnFlixApp() {
                     <span>Add to My List</span>
                   </>
                 )}
+              </button>
+              <button
+                onClick={() => {
+                  const target = contextMenu.item;
+                  setContextMenu(null);
+                  setAddToPlaylistItem(target);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-zinc-800/90 flex items-center gap-2.5 text-zinc-200 transition-colors"
+              >
+                <ListPlus className="w-3.5 h-3.5 text-[#3B82F6]" />
+                <span>Add to Playlist...</span>
               </button>
             </div>
 
@@ -1121,6 +1163,14 @@ export default function OwnFlixApp() {
             </div>
           </form>
         </div>
+      )}
+      {/* Add To Custom Playlist Modal */}
+      {addToPlaylistItem && activeProfile && (
+        <AddToPlaylistModal
+          item={addToPlaylistItem}
+          activeProfile={activeProfile}
+          onClose={() => setAddToPlaylistItem(null)}
+        />
       )}
     </div>
   );

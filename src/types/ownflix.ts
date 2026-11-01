@@ -100,3 +100,30 @@ export interface ActivityLogItem {
   ipAddress: string | null;
   createdAt: string;
 }
+
+export interface PlaylistItem {
+  id: string;
+  playlistId: string;
+  mediaItemId: string;
+  mediaItem: MediaItem;
+  order: number;
+  createdAt: string;
+}
+
+export interface Playlist {
+  id: string;
+  title: string;
+  description: string | null;
+  isPublic: boolean;
+  shareCode: string;
+  profileId: string;
+  profile?: {
+    id: string;
+    name: string;
+    avatarColor: string;
+    avatarIcon: string;
+  };
+  items: PlaylistItem[];
+  createdAt: string;
+  updatedAt: string;
+}
