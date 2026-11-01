@@ -3,6 +3,7 @@ export interface Profile {
   name: string;
   avatarColor: string;
   avatarIcon: string;
+  hasPassword: boolean;
   isKids: boolean;
   isAdmin: boolean;
 }

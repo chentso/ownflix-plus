@@ -12,6 +12,8 @@ import {
   FolderSync,
   LogOut,
   PlusCircle,
+  KeyRound,
+  Lock,
 } from "lucide-react";
 
 export type NavCategory = "HOME" | "SERIES" | "MOVIES" | "LOCAL" | "MY_LIST";
@@ -25,6 +27,7 @@ interface NavbarProps {
   onSearchChange: (q: string) => void;
   onSwitchProfile: (profile: Profile) => void;
   onManageProfiles: () => void;
+  onOpenAccountSettings: () => void;
   onOpenAdmin: (tab?: "folders" | "media") => void;
 }
 
@@ -37,6 +40,7 @@ export default function Navbar({
   onSearchChange,
   onSwitchProfile,
   onManageProfiles,
+  onOpenAccountSettings,
   onOpenAdmin,
 }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
@@ -177,12 +181,15 @@ export default function Navbar({
             className="flex items-center gap-2 focus:outline-none py-1"
           >
             <div
-              className="w-8 h-8 rounded flex items-center justify-center shadow-md"
+              className="w-8 h-8 rounded flex items-center justify-center shadow-md relative"
               style={{
                 background: `linear-gradient(145deg, ${activeProfile.avatarColor}, #111111 150%)`,
               }}
             >
-              {renderProfileIcon(activeProfile.avatarIcon, "w-4 h-4 text-white")}
+              {renderProfileIcon(
+                activeProfile.avatarIcon,
+                "w-4 h-4 text-white"
+              )}
             </div>
             <ChevronDown
               className={`w-4 h-4 text-white transition-transform duration-200 ${
@@ -192,7 +199,7 @@ export default function Navbar({
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 top-full pt-2 w-56 z-50">
+            <div className="absolute right-0 top-full pt-2 w-60 z-50">
               <div className="bg-black/95 border border-zinc-800 rounded shadow-2xl py-2 text-sm">
                 <div className="px-3 py-1.5 text-[11px] uppercase tracking-wider text-zinc-500 font-semibold">
                   Switch Profiles
@@ -219,6 +226,9 @@ export default function Navbar({
                       {renderProfileIcon(p.avatarIcon, "w-4 h-4 text-white")}
                     </div>
                     <span className="truncate flex-1">{p.name}</span>
+                    {p.hasPassword && (
+                      <Lock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    )}
                     {p.isKids && (
                       <span className="text-[10px] bg-amber-400 text-black font-bold px-1 rounded">
                         KIDS
@@ -228,6 +238,17 @@ export default function Navbar({
                 ))}
 
                 <div className="border-t border-zinc-800 my-1.5" />
+
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    onOpenAccountSettings();
+                  }}
+                  className="w-full px-3 py-2 flex items-center gap-3 text-zinc-200 hover:text-white hover:bg-zinc-800/70 transition-colors font-medium"
+                >
+                  <KeyRound className="w-4 h-4 text-[#E50914]" />
+                  <span>Profile Password & Account</span>
+                </button>
 
                 <button
                   onClick={() => {

@@ -2,14 +2,26 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Profile, MediaItem, Episode } from "@/types/ownflix";
-import ProfileGate from "@/components/ProfileGate";
+import ProfileGate, { renderProfileIcon } from "@/components/ProfileGate";
 import Navbar, { NavCategory } from "@/components/Navbar";
 import HeroBillboard from "@/components/HeroBillboard";
 import MediaRow from "@/components/MediaRow";
 import DetailModal from "@/components/DetailModal";
 import NetflixPlayer from "@/components/NetflixPlayer";
 import AdminDashboardModal from "@/components/AdminDashboardModal";
-import { HardDrive, Play, Plus, Check, Info, FolderSync } from "lucide-react";
+import ProfileAccountModal from "@/components/ProfileAccountModal";
+import {
+  HardDrive,
+  Play,
+  Plus,
+  Check,
+  Info,
+  FolderSync,
+  Lock,
+  X,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 export default function OwnFlixApp() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -33,6 +45,16 @@ export default function OwnFlixApp() {
     tab: "folders" | "media";
     editItem?: MediaItem | null;
   }>({ open: false, tab: "folders", editItem: null });
+
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+
+  // Password prompt when switching to a locked profile from Navbar
+  const [pendingSwitchProfile, setPendingSwitchProfile] =
+    useState<Profile | null>(null);
+  const [switchPassword, setSwitchPassword] = useState("");
+  const [switchError, setSwitchError] = useState<string | null>(null);
+  const [verifyingSwitch, setVerifyingSwitch] = useState(false);
+  const [showSwitchPass, setShowSwitchPass] = useState(false);
 
   const handleSelectProfile = useCallback((profile: Profile | null) => {
     setActiveProfile(profile);
@@ -295,8 +317,19 @@ export default function OwnFlixApp() {
         onSelectCategory={(cat) => setActiveCategory(cat)}
         searchQuery={searchQuery}
         onSearchChange={(q) => setSearchQuery(q)}
-        onSwitchProfile={(p) => handleSelectProfile(p)}
+        onSwitchProfile={(p) => {
+          if (p.id === activeProfile.id) return;
+          if (p.hasPassword) {
+            setPendingSwitchProfile(p);
+            setSwitchPassword("");
+            setSwitchError(null);
+            setShowSwitchPass(false);
+          } else {
+            handleSelectProfile(p);
+          }
+        }}
         onManageProfiles={() => handleSelectProfile(null)}
+        onOpenAccountSettings={() => setAccountModalOpen(true)}
         onOpenAdmin={(tab = "folders") =>
           setAdminModal({ open: true, tab, editItem: null })
         }
@@ -592,6 +625,132 @@ export default function OwnFlixApp() {
           }
           onLibraryUpdated={() => fetchMedia(activeProfile.id)}
         />
+      )}
+
+      {/* Profile Account & Password Settings Modal */}
+      {accountModalOpen && (
+        <ProfileAccountModal
+          profile={activeProfile}
+          onClose={() => setAccountModalOpen(false)}
+          onProfileUpdated={async (updated) => {
+            setActiveProfile(updated);
+            await fetchProfiles();
+          }}
+        />
+      )}
+
+      {/* Password Prompt Modal when switching to a locked profile from Navbar */}
+      {pendingSwitchProfile && (
+        <div
+          onClick={() => setPendingSwitchProfile(null)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 select-none"
+        >
+          <form
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setVerifyingSwitch(true);
+              setSwitchError(null);
+              try {
+                const res = await fetch("/api/profiles/auth", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    profileId: pendingSwitchProfile.id,
+                    password: switchPassword,
+                  }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  setSwitchError(data.error || "Incorrect password");
+                } else {
+                  const target = pendingSwitchProfile;
+                  setPendingSwitchProfile(null);
+                  setSwitchPassword("");
+                  handleSelectProfile(target);
+                }
+              } finally {
+                setVerifyingSwitch(false);
+              }
+            }}
+            className="bg-[#181818] border border-zinc-800 rounded-xl max-w-md w-full p-6 md:p-8 shadow-2xl text-center"
+          >
+            <div className="flex justify-end -mt-2 -mr-2">
+              <button
+                type="button"
+                onClick={() => setPendingSwitchProfile(null)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div
+              className="w-20 h-20 rounded-md flex items-center justify-center mx-auto mb-4 shadow-lg relative"
+              style={{
+                background: `linear-gradient(145deg, ${pendingSwitchProfile.avatarColor}, #111111 150%)`,
+              }}
+            >
+              {renderProfileIcon(pendingSwitchProfile.avatarIcon, "w-10 h-10")}
+              <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#E50914] border-2 border-[#181818] flex items-center justify-center">
+                <Lock className="w-3.5 h-3.5 text-white" />
+              </span>
+            </div>
+
+            <div className="text-xs uppercase tracking-widest text-zinc-400 font-semibold mb-1">
+              Profile Lock is ON
+            </div>
+            <h2 className="text-xl md:text-2xl font-bold mb-6">
+              Enter password to switch to {pendingSwitchProfile.name}
+            </h2>
+
+            {switchError && (
+              <div className="mb-4 px-3 py-2 bg-red-950/80 border border-red-700/70 rounded text-xs text-red-200">
+                {switchError}
+              </div>
+            )}
+
+            <div className="relative mb-6">
+              <input
+                type={showSwitchPass ? "text" : "password"}
+                value={switchPassword}
+                onChange={(e) => setSwitchPassword(e.target.value)}
+                placeholder="Enter profile password"
+                autoFocus
+                required
+                className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-4 py-3 text-white text-center tracking-wider outline-none pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSwitchPass((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+              >
+                {showSwitchPass ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingSwitchProfile(null)}
+                className="px-5 py-2.5 text-sm border border-zinc-600 text-zinc-300 hover:border-white hover:text-white rounded"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={verifyingSwitch}
+                className="px-7 py-2.5 text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+              >
+                {verifyingSwitch ? "Verifying..." : "Unlock Profile"}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </div>
   );

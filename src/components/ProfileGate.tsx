@@ -14,6 +14,10 @@ import {
   Tv,
   Smile,
   Flame,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from "lucide-react";
 
 interface ProfileGateProps {
@@ -31,7 +35,7 @@ const AVATAR_COLORS = [
   "#EC4899", // Neon Pink
 ];
 
-const AVATAR_ICONS = [
+export const AVATAR_ICONS = [
   { id: "smile", label: "Classic", Icon: Smile },
   { id: "crown", label: "Crown", Icon: Crown },
   { id: "zap", label: "Bolt", Icon: Zap },
@@ -55,11 +59,69 @@ export default function ProfileGate({
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Unlock password prompt state
+  const [unlockingProfile, setUnlockingProfile] = useState<Profile | null>(
+    null
+  );
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [verifyingUnlock, setVerifyingUnlock] = useState(false);
+  const [showUnlockPass, setShowUnlockPass] = useState(false);
+
+  // Create / Edit Profile form state
   const [name, setName] = useState("");
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0]);
   const [avatarIcon, setAvatarIcon] = useState("smile");
   const [isKids, setIsKids] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [removePassword, setRemovePassword] = useState(false);
+  const [showFormPass, setShowFormPass] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const handleProfileClick = (profile: Profile) => {
+    if (isManaging) {
+      openEditModal(profile);
+      return;
+    }
+    if (profile.hasPassword) {
+      setUnlockingProfile(profile);
+      setUnlockPassword("");
+      setUnlockError(null);
+      setShowUnlockPass(false);
+    } else {
+      onSelectProfile(profile);
+    }
+  };
+
+  const handleUnlockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unlockingProfile) return;
+    setVerifyingUnlock(true);
+    setUnlockError(null);
+    try {
+      const res = await fetch("/api/profiles/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId: unlockingProfile.id,
+          password: unlockPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUnlockError(data.error || "Incorrect password");
+      } else {
+        const target = unlockingProfile;
+        setUnlockingProfile(null);
+        setUnlockPassword("");
+        onSelectProfile(target);
+      }
+    } finally {
+      setVerifyingUnlock(false);
+    }
+  };
 
   const openCreateModal = () => {
     setEditingProfile(null);
@@ -67,6 +129,10 @@ export default function ProfileGate({
     setAvatarColor(AVATAR_COLORS[profiles.length % AVATAR_COLORS.length]);
     setAvatarIcon("smile");
     setIsKids(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setRemovePassword(false);
+    setFormError(null);
     setIsCreating(true);
   };
 
@@ -77,26 +143,43 @@ export default function ProfileGate({
     setAvatarColor(p.avatarColor);
     setAvatarIcon(p.avatarIcon);
     setIsKids(p.isKids);
+    setCurrentPassword("");
+    setNewPassword("");
+    setRemovePassword(false);
+    setFormError(null);
   };
 
   const closeModal = () => {
     setIsCreating(false);
     setEditingProfile(null);
+    setFormError(null);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
+    setFormError(null);
     try {
       if (isCreating) {
-        await fetch("/api/profiles", {
+        const res = await fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, avatarColor, avatarIcon, isKids }),
+          body: JSON.stringify({
+            name,
+            avatarColor,
+            avatarIcon,
+            isKids,
+            password: newPassword,
+          }),
         });
+        const data = await res.json();
+        if (!res.ok) {
+          setFormError(data.error || "Failed to create profile");
+          return;
+        }
       } else if (editingProfile) {
-        await fetch("/api/profiles", {
+        const res = await fetch("/api/profiles", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -105,8 +188,20 @@ export default function ProfileGate({
             avatarColor,
             avatarIcon,
             isKids,
+            ...(newPassword.trim() || removePassword
+              ? {
+                  currentPassword,
+                  newPassword: newPassword.trim() || undefined,
+                  removePassword,
+                }
+              : {}),
           }),
         });
+        const data = await res.json();
+        if (!res.ok) {
+          setFormError(data.error || "Failed to update profile");
+          return;
+        }
       }
       await onProfilesChanged();
       closeModal();
@@ -118,8 +213,21 @@ export default function ProfileGate({
   const handleDelete = async (id: string) => {
     if (profiles.length <= 1) return;
     setSaving(true);
+    setFormError(null);
     try {
-      await fetch(`/api/profiles?id=${id}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/profiles?id=${encodeURIComponent(
+          id
+        )}&password=${encodeURIComponent(currentPassword)}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setFormError(
+          data.error || "Enter current profile password to delete this profile"
+        );
+        return;
+      }
       await onProfilesChanged();
       closeModal();
     } finally {
@@ -151,9 +259,7 @@ export default function ProfileGate({
           {profiles.map((profile) => (
             <button
               key={profile.id}
-              onClick={() =>
-                isManaging ? openEditModal(profile) : onSelectProfile(profile)
-              }
+              onClick={() => handleProfileClick(profile)}
               className="group flex flex-col items-center focus:outline-none"
             >
               <div
@@ -178,6 +284,15 @@ export default function ProfileGate({
                   </span>
                 )}
 
+                {profile.hasPassword && !isManaging && (
+                  <span
+                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/65 border border-white/25 flex items-center justify-center text-zinc-200"
+                    title="Password Protected Profile"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                  </span>
+                )}
+
                 {isManaging && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                     <div className="w-11 h-11 rounded-full border-2 border-white flex items-center justify-center">
@@ -188,7 +303,10 @@ export default function ProfileGate({
               </div>
 
               <span className="mt-3 text-zinc-400 group-hover:text-white text-base md:text-lg font-normal transition-colors flex items-center gap-1.5">
-                {profile.name}
+                <span>{profile.name}</span>
+                {profile.hasPassword && (
+                  <Lock className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
+                )}
               </span>
             </button>
           ))}
@@ -226,12 +344,101 @@ export default function ProfileGate({
         OwnFlix+ Self-Hosted Streaming Engine • Direct Play & FFmpeg Live Remux
       </footer>
 
+      {/* Profile Lock Password Verification Modal */}
+      {unlockingProfile && (
+        <div
+          onClick={() => setUnlockingProfile(null)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <form
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={handleUnlockSubmit}
+            className="bg-[#181818] border border-zinc-800 rounded-xl max-w-md w-full p-6 md:p-8 shadow-2xl text-center"
+          >
+            <div className="flex justify-end -mt-2 -mr-2">
+              <button
+                type="button"
+                onClick={() => setUnlockingProfile(null)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div
+              className="w-20 h-20 rounded-md flex items-center justify-center mx-auto mb-4 shadow-lg relative"
+              style={{
+                background: `linear-gradient(145deg, ${unlockingProfile.avatarColor}, #111111 150%)`,
+              }}
+            >
+              {renderProfileIcon(unlockingProfile.avatarIcon, "w-10 h-10")}
+              <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#E50914] border-2 border-[#181818] flex items-center justify-center">
+                <Lock className="w-3.5 h-3.5 text-white" />
+              </span>
+            </div>
+
+            <div className="text-xs uppercase tracking-widest text-zinc-400 font-semibold mb-1">
+              Profile Lock is ON
+            </div>
+            <h2 className="text-xl md:text-2xl font-bold mb-6">
+              Enter password to access {unlockingProfile.name}
+            </h2>
+
+            {unlockError && (
+              <div className="mb-4 px-3 py-2 bg-red-950/80 border border-red-700/70 rounded text-xs text-red-200">
+                {unlockError}
+              </div>
+            )}
+
+            <div className="relative mb-6">
+              <input
+                type={showUnlockPass ? "text" : "password"}
+                value={unlockPassword}
+                onChange={(e) => setUnlockPassword(e.target.value)}
+                placeholder="Enter profile password"
+                autoFocus
+                required
+                className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-4 py-3 text-white text-center tracking-wider outline-none pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowUnlockPass((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+              >
+                {showUnlockPass ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setUnlockingProfile(null)}
+                className="px-5 py-2.5 text-sm border border-zinc-600 text-zinc-300 hover:border-white hover:text-white rounded"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={verifyingUnlock}
+                className="px-7 py-2.5 text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+              >
+                {verifyingUnlock ? "Verifying..." : "Unlock Profile"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Create / Edit Profile Modal */}
       {(isCreating || editingProfile) && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <form
             onSubmit={handleSave}
-            className="bg-[#181818] border border-zinc-800 rounded-lg max-w-md w-full p-6 md:p-8 shadow-2xl"
+            className="bg-[#181818] border border-zinc-800 rounded-lg max-w-md w-full p-6 md:p-8 shadow-2xl my-auto"
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">
@@ -245,6 +452,12 @@ export default function ProfileGate({
                 <X className="w-6 h-6" />
               </button>
             </div>
+
+            {formError && (
+              <div className="mb-4 px-3 py-2 bg-red-950/80 border border-red-700/70 rounded text-xs text-red-200">
+                {formError}
+              </div>
+            )}
 
             <div className="flex items-center gap-5 mb-6">
               <div
@@ -289,7 +502,9 @@ export default function ProfileGate({
                     }`}
                     style={{ backgroundColor: color }}
                   >
-                    {avatarColor === color && <Check className="w-4 h-4 text-white" />}
+                    {avatarColor === color && (
+                      <Check className="w-4 h-4 text-white" />
+                    )}
                   </button>
                 ))}
               </div>
@@ -316,6 +531,88 @@ export default function ProfileGate({
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Profile Password Lock Section */}
+            <div className="mb-5 bg-zinc-900/80 border border-zinc-800 rounded-lg p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-300">
+                  <KeyRound className="w-3.5 h-3.5 text-[#E50914]" />
+                  <span>Profile Password Lock</span>
+                </div>
+                {editingProfile?.hasPassword && (
+                  <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-700/50 px-1.5 py-0.5 rounded font-semibold">
+                    Password Active
+                  </span>
+                )}
+              </div>
+
+              {editingProfile?.hasPassword && (
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    Current Password (required to change/remove password or
+                    delete)
+                  </label>
+                  <input
+                    type={showFormPass ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="w-full bg-zinc-800 border border-zinc-700 focus:border-white rounded px-3 py-1.5 text-sm text-white outline-none"
+                  />
+                </div>
+              )}
+
+              {!removePassword && (
+                <div className="relative">
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    {editingProfile?.hasPassword
+                      ? "New Password (leave blank to keep unchanged)"
+                      : "Set Password (optional)"}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showFormPass ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder={
+                        editingProfile?.hasPassword
+                          ? "Enter new password"
+                          : "Leave blank for no password"
+                      }
+                      className="w-full bg-zinc-800 border border-zinc-700 focus:border-white rounded px-3 py-1.5 text-sm text-white outline-none pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormPass((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                    >
+                      {showFormPass ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {editingProfile?.hasPassword && (
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={removePassword}
+                    onChange={(e) => {
+                      setRemovePassword(e.target.checked);
+                      if (e.target.checked) setNewPassword("");
+                    }}
+                    className="w-3.5 h-3.5 accent-[#E50914]"
+                  />
+                  <span className="text-xs text-zinc-400">
+                    Remove password lock from this profile
+                  </span>
+                </label>
+              )}
             </div>
 
             {/* Kids Toggle */}
