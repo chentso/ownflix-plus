@@ -2508,15 +2508,34 @@ export default function NetflixPlayer({
             }}
             className="group/scrub relative flex-1 py-2 cursor-pointer"
           >
-            {/* Hover Time Preview Tooltip */}
+            {/* Hover Thumbnail & Time Preview Tooltip */}
             {hoverTime !== null && (
               <div
-                className="absolute -top-8 -translate-x-1/2 bg-black/90 border border-zinc-700 text-white text-xs font-mono font-semibold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap"
+                className="absolute bottom-6 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 transition-all duration-75"
                 style={{
-                  left: `${Math.max(3, Math.min(97, hoverPercent))}%`,
+                  left: `${Math.max(8, Math.min(92, hoverPercent))}%`,
                 }}
               >
-                {formatTime(hoverTime)}
+                <div className="w-44 sm:w-48 aspect-video rounded-lg overflow-hidden border border-zinc-700 bg-zinc-950 shadow-[0_10px_30px_rgba(0,0,0,0.9)] relative flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/thumbnail?${
+                      currentEpisode
+                        ? `episodeId=${currentEpisode.id}`
+                        : `mediaId=${item.id}`
+                    }&t=${Math.floor(hoverTime)}`}
+                    alt="Seek preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = "none";
+                    }}
+                  />
+                  <div className="absolute inset-x-0 bottom-0 py-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex justify-center">
+                    <span className="text-[11px] font-mono font-bold text-white tracking-wider px-2 py-0.5 rounded bg-black/60 border border-white/10 shadow">
+                      {formatTime(hoverTime)}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
 
