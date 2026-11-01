@@ -12,6 +12,41 @@ export async function GET(req: NextRequest) {
   const includePublic = searchParams.get("includePublic") === "true";
 
   try {
+    if (profileId) {
+      // Ensure the profile has a default "My List" playlist
+      let myListPlaylist = await prisma.playlist.findFirst({
+        where: {
+          profileId,
+          title: "My List",
+        },
+      });
+
+      if (!myListPlaylist) {
+        // Fetch any existing MyListItem entries to seed the default playlist
+        const existingItems = await prisma.myListItem.findMany({
+          where: { profileId },
+          orderBy: { createdAt: "asc" },
+        });
+
+        const randomSuffix = Math.random().toString(36).substring(2, 6);
+        await prisma.playlist.create({
+          data: {
+            title: "My List",
+            description: "Your default saved watchlist and favorites",
+            isPublic: false,
+            shareCode: `my-list-${randomSuffix}`,
+            profileId,
+            items: {
+              create: existingItems.map((item, idx) => ({
+                mediaItemId: item.mediaItemId,
+                order: idx,
+              })),
+            },
+          },
+        });
+      }
+    }
+
     let whereClause: any = {};
 
     if (profileId && includePublic) {
@@ -53,6 +88,21 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { updatedAt: "desc" },
     });
+
+    // Pinned sort: "My List" belonging to the current profile is always at index 0
+    if (profileId) {
+      playlists.sort((a, b) => {
+        const aIsMyList =
+          a.profileId === profileId && a.title.toLowerCase() === "my list";
+        const bIsMyList =
+          b.profileId === profileId && b.title.toLowerCase() === "my list";
+        if (aIsMyList && !bIsMyList) return -1;
+        if (!aIsMyList && bIsMyList) return 1;
+        return (
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      });
+    }
 
     return NextResponse.json({ playlists });
   } catch (error) {

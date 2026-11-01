@@ -325,5 +325,21 @@ async function runSeed(): Promise<void> {
         },
       ],
     });
+
+    await prisma.playlist.create({
+      data: {
+        title: "My List",
+        description: "Your default saved watchlist and favorites",
+        isPublic: false,
+        shareCode: "my-list-seed",
+        profileId: firstProfile.id,
+        items: {
+          create: [
+            { mediaItemId: tearsOfSteel.id, order: 0 },
+            { mediaItemId: chronicles.id, order: 1 },
+          ],
+        },
+      },
+    });
   }
 }

@@ -137,6 +137,13 @@ export async function DELETE(
       );
     }
 
+    if (existing.title.toLowerCase() === "my list") {
+      return NextResponse.json(
+        { error: "The default 'My List' playlist cannot be deleted." },
+        { status: 400 }
+      );
+    }
+
     await prisma.playlist.delete({
       where: { id: params.id },
     });

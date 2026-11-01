@@ -718,7 +718,7 @@ export default function OwnFlixApp() {
             </div>
           )}
         </main>
-      ) : activeCategory === "PLAYLISTS" ? (
+      ) : activeCategory === "PLAYLISTS" || activeCategory === "MY_LIST" ? (
         <PlaylistsView
           activeProfile={activeProfile}
           onPlayMedia={(item, queue) => {
@@ -727,47 +727,37 @@ export default function OwnFlixApp() {
           onSelectMediaDetails={(item) => setDetailItem(item)}
           initialShareCode={pendingPlaylistCode}
         />
-      ) : activeCategory === "MY_LIST" || activeCategory === "LOCAL" ? (
+      ) : activeCategory === "LOCAL" ? (
         <main className="pt-28 px-4 md:px-12">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">
-                {activeCategory === "MY_LIST"
-                  ? `${activeProfile.name}'s List`
-                  : "Local Disk Library (Direct Range & FFmpeg Remux)"}
+                Local Disk Library (Direct Range &amp; FFmpeg Remux)
               </h1>
               <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                {activeCategory === "MY_LIST"
-                  ? "Movies and TV shows you've bookmarked to watch later."
-                  : "Video files (.mp4, .mkv, .webm, .avi) indexed directly from your local folders."}
+                Video files (.mp4, .mkv, .webm, .avi) indexed directly from your local folders.
               </p>
             </div>
 
-            {activeCategory === "LOCAL" && (
-              <button
-                onClick={() =>
-                  setAdminModal({ open: true, tab: "folders", editItem: null })
-                }
-                className="flex items-center gap-2 bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors self-start"
-              >
-                <FolderSync className="w-4 h-4" />
-                <span>Add / Scan Local Folders</span>
-              </button>
-            )}
+            <button
+              onClick={() =>
+                setAdminModal({ open: true, tab: "folders", editItem: null })
+              }
+              className="flex items-center gap-2 bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors self-start"
+            >
+              <FolderSync className="w-4 h-4" />
+              <span>Add / Scan Local Folders</span>
+            </button>
           </div>
 
           {categoryMedia.length === 0 ? (
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-12 text-center max-w-xl mx-auto my-12">
               <HardDrive className="w-10 h-10 text-zinc-500 mx-auto mb-3" />
               <h3 className="text-lg font-bold mb-1">
-                {activeCategory === "MY_LIST"
-                  ? "Your list is currently empty"
-                  : "No local files indexed yet"}
+                No local files indexed yet
               </h3>
               <p className="text-sm text-zinc-400 mb-5">
-                {activeCategory === "MY_LIST"
-                  ? "Click the '+' button on any movie or series to add it to your personal watchlist."
-                  : "Add a folder path in the Library Manager to index MP4 and MKV files from your computer."}
+                Add a folder path in the Library Manager to index MP4 and MKV files from your computer.
               </p>
             </div>
           ) : (
@@ -1297,6 +1287,7 @@ export default function OwnFlixApp() {
           item={addToPlaylistItem}
           activeProfile={activeProfile}
           onClose={() => setAddToPlaylistItem(null)}
+          onPlaylistUpdated={() => fetchMedia(activeProfile.id)}
         />
       )}
     </div>

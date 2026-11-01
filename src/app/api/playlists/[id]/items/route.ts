@@ -71,6 +71,22 @@ export async function POST(
       data: { updatedAt: new Date() },
     });
 
+    if (playlist.title.toLowerCase() === "my list") {
+      await prisma.myListItem.upsert({
+        where: {
+          profileId_mediaItemId: {
+            profileId: playlist.profileId,
+            mediaItemId,
+          },
+        },
+        create: {
+          profileId: playlist.profileId,
+          mediaItemId,
+        },
+        update: {},
+      });
+    }
+
     if (profileId) {
       await logProfileActivity({
         profileId,
@@ -133,6 +149,15 @@ export async function DELETE(
       where: { id: params.id },
       data: { updatedAt: new Date() },
     });
+
+    if (playlist.title.toLowerCase() === "my list") {
+      await prisma.myListItem.deleteMany({
+        where: {
+          profileId: playlist.profileId,
+          mediaItemId,
+        },
+      });
+    }
 
     if (profileId) {
       await logProfileActivity({

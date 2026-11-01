@@ -10,6 +10,7 @@ import {
   FolderPlus,
   Loader2,
   Film,
+  Bookmark,
 } from "lucide-react";
 
 interface AddToPlaylistModalProps {
@@ -217,8 +218,16 @@ export default function AddToPlaylistModal({
                     }`}
                   >
                     <div className="min-w-0 pr-3">
-                      <div className="font-semibold truncate">
-                        {playlist.title}
+                      <div className="font-semibold truncate flex items-center gap-1.5">
+                        {playlist.title.toLowerCase() === "my list" && (
+                          <Bookmark className="w-3.5 h-3.5 text-[#3B82F6] fill-[#3B82F6] shrink-0" />
+                        )}
+                        <span>{playlist.title}</span>
+                        {playlist.title.toLowerCase() === "my list" && (
+                          <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[#2563EB]/40 border border-[#3B82F6]/60 text-blue-200 font-bold">
+                            Default
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-zinc-400">
                         {playlist.items.length} item

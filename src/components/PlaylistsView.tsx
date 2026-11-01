@@ -27,6 +27,7 @@ import {
   ChevronRight,
   ExternalLink,
   X,
+  Bookmark,
 } from "lucide-react";
 
 interface PlaylistsViewProps {
@@ -388,8 +389,21 @@ export default function PlaylistsView({
             {/* Info and Actions */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 text-xs font-bold text-[#3B82F6] uppercase tracking-wider mb-2">
-                <Layers className="w-4 h-4" />
-                <span>Custom Playlist</span>
+                {activePlaylist.title.toLowerCase() === "my list" &&
+                activePlaylist.profileId === activeProfile.id ? (
+                  <>
+                    <Bookmark className="w-4 h-4 fill-[#3B82F6]" />
+                    <span>Default Watchlist</span>
+                    <span className="text-[10px] bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full font-semibold">
+                      My List
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4" />
+                    <span>Custom Playlist</span>
+                  </>
+                )}
                 {activePlaylist.isPublic ? (
                   <span className="flex items-center gap-1 text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full font-medium">
                     <Globe className="w-3 h-3" /> Public
@@ -508,13 +522,15 @@ export default function PlaylistsView({
                       <span>Edit</span>
                     </button>
 
-                    <button
-                      onClick={() => handleDeletePlaylist(activePlaylist)}
-                      className="px-3.5 py-2.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 hover:text-red-200 text-xs font-medium flex items-center gap-1.5 border border-red-900/50 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete</span>
-                    </button>
+                    {activePlaylist.title.toLowerCase() !== "my list" && (
+                      <button
+                        onClick={() => handleDeletePlaylist(activePlaylist)}
+                        className="px-3.5 py-2.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 hover:text-red-200 text-xs font-medium flex items-center gap-1.5 border border-red-900/50 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -713,6 +729,8 @@ export default function PlaylistsView({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
               {playlists.map((playlist) => {
                 const isOwner = playlist.profileId === activeProfile.id;
+                const isMyList =
+                  isOwner && playlist.title.toLowerCase() === "my list";
 
                 return (
                   <div
@@ -723,6 +741,15 @@ export default function PlaylistsView({
                     {/* Poster Collage Box */}
                     <div className="relative aspect-video w-full bg-zinc-900 overflow-hidden border-b border-zinc-800/60">
                       {renderCollage(playlist.items)}
+
+                      {/* Default List Badge */}
+                      {isMyList && (
+                        <div className="absolute top-2.5 left-2.5 z-10">
+                          <span className="bg-[#2563EB] border border-blue-400 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg">
+                            <Bookmark className="w-3 h-3 fill-white" /> Default List
+                          </span>
+                        </div>
+                      )}
 
                       {/* Play All overlay on hover */}
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -759,11 +786,15 @@ export default function PlaylistsView({
                     {/* Card Content */}
                     <div className="p-4 flex-1 flex flex-col justify-between">
                       <div>
-                        <h3 className="font-bold text-sm text-white group-hover:text-[#3B82F6] truncate transition-colors">
-                          {playlist.title}
+                        <h3 className="font-bold text-sm text-white group-hover:text-[#3B82F6] truncate transition-colors flex items-center gap-1.5">
+                          {isMyList && (
+                            <Bookmark className="w-3.5 h-3.5 text-[#3B82F6] fill-[#3B82F6] shrink-0" />
+                          )}
+                          <span className="truncate">{playlist.title}</span>
                         </h3>
                         <p className="text-xs text-zinc-400 mt-1 line-clamp-1">
-                          {playlist.description || `${playlist.items.length} titles`}
+                          {playlist.description ||
+                            `${playlist.items.length} titles`}
                         </p>
                       </div>
 

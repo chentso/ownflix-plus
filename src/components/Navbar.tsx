@@ -77,7 +77,6 @@ export default function Navbar({
     { id: "SERIES", label: "TV Shows" },
     { id: "MOVIES", label: "Movies" },
     { id: "LOCAL", label: "Local Disk" },
-    { id: "MY_LIST", label: "My List" },
     { id: "PLAYLISTS", label: "Playlists" },
   ];
 
