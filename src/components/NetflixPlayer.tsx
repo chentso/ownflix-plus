@@ -1871,35 +1871,40 @@ export default function NetflixPlayer({
           </div>
         </button>
 
-        {/* Right Top: Watch Together Button & Stream Quality Badge */}
+        {/* Right Top: Combined Speed & Quality Status Box */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Current Playback Speed Badge */}
-          <button
-            onClick={() =>
-              setActivePopover((p) => (p === "speed" ? "none" : "speed"))
-            }
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border bg-black/60 border-zinc-600 text-zinc-100 hover:border-white transition-colors"
-            title="Current Playback Speed"
-          >
-            <Gauge className="w-3.5 h-3.5 text-[#2563EB]" />
-            <span>Speed: {playbackSpeed}x</span>
-          </button>
+          <div className="flex items-center rounded border bg-[#141414] border-zinc-700 text-xs font-semibold text-zinc-100 overflow-hidden shadow-lg">
+            <button
+              onClick={() =>
+                setActivePopover((p) => (p === "speed" ? "none" : "speed"))
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-zinc-800 transition-colors"
+              title="Current Playback Speed"
+            >
+              <Gauge className="w-3.5 h-3.5 text-[#3B82F6]" />
+              <span className="font-bold">{playbackSpeed}x</span>
+            </button>
 
-          <button
-            onClick={() =>
-              setActivePopover((p) => (p === "quality" ? "none" : "quality"))
-            }
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
-              effectiveQuality !== "original"
-                ? "bg-[#2563EB] border-[#2563EB] text-white"
-                : "bg-black/60 border-zinc-600 text-zinc-200 hover:border-white"
-            }`}
-            title="Change Transcoding Quality for Slower Connections"
-          >
-            <Wifi className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Quality:</span>
-            <span>{qualityBadgeLabel}</span>
-          </button>
+            <div className="w-px h-4 bg-zinc-700" />
+
+            <button
+              onClick={() =>
+                setActivePopover((p) => (p === "quality" ? "none" : "quality"))
+              }
+              className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${
+                effectiveQuality !== "original"
+                  ? "bg-[#2563EB] text-white"
+                  : "hover:bg-zinc-800 text-zinc-200"
+              }`}
+              title="Change Transcoding Quality for Slower Connections"
+            >
+              <Wifi className="w-3.5 h-3.5 text-[#3B82F6]" />
+              <span className="hidden sm:inline text-zinc-400 font-normal">
+                Quality:
+              </span>
+              <span className="font-bold">{qualityBadgeLabel}</span>
+            </button>
+          </div>
 
           {!showSkipIntroButton && currentTime < introEnd && (
             <button
