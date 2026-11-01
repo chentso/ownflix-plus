@@ -2758,95 +2758,18 @@ export default function NetflixPlayer({
               return (
                 <div
                   key={msg.id}
-                  className="group/msg relative rounded-lg p-2.5 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800/70 hover:border-zinc-700 transition-colors text-xs"
+                  className={`flex flex-col ${
+                    isOwn ? "items-end" : "items-start"
+                  } text-xs`}
                 >
-                  {/* Microsoft Teams Floating Hover Reaction & Action Toolbar */}
-                  {!isEditing && (
-                    <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-3 right-2 z-20 flex items-center gap-0.5 bg-[#1f1f1f] border border-zinc-700 rounded-full px-1.5 py-0.5 shadow-xl">
-                      {QUICK_REACTIONS.map((emo) => (
-                        <button
-                          key={emo}
-                          type="button"
-                          onClick={() => handleToggleReaction(msg.id, emo)}
-                          className="hover:scale-125 transition-transform px-1 py-0.5 text-xs leading-none"
-                          title={`React ${emo}`}
-                        >
-                          {emo}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setReactionPickerMsgId((prev) =>
-                            prev === msg.id ? null : msg.id
-                          )
-                        }
-                        className="p-1 text-zinc-400 hover:text-white rounded"
-                        title="More reactions"
-                      >
-                        <Smile className="w-3 h-3" />
-                      </button>
-                      {isOwn && (
-                        <>
-                          <div className="w-px h-3.5 bg-zinc-700 mx-0.5" />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingMessageId(msg.id);
-                              setEditingText(msg.text);
-                            }}
-                            className="p-1 text-zinc-400 hover:text-white rounded"
-                            title="Edit message"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteMessage(msg.id)}
-                            className="p-1 text-zinc-400 hover:text-red-400 rounded"
-                            title="Delete message"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Expanded Reaction Emoji Picker for this Message */}
-                  {reactionPickerMsgId === msg.id && (
-                    <div className="mt-2 mb-2 bg-[#1a1a1a] border border-zinc-700 rounded-xl p-2.5 shadow-2xl z-30">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                        <span>React with any emoji</span>
-                        <button
-                          type="button"
-                          onClick={() => setReactionPickerMsgId(null)}
-                          className="text-zinc-400 hover:text-white"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto pr-1">
-                        {EMOJI_CATEGORIES.flatMap((c) => c.emojis).map((item) => (
-                          <button
-                            key={`react-${msg.id}-${item.char}`}
-                            type="button"
-                            onClick={() => {
-                              handleToggleReaction(msg.id, item.char);
-                              setReactionPickerMsgId(null);
-                            }}
-                            className="h-7 rounded hover:bg-zinc-800 flex items-center justify-center text-base transition-transform hover:scale-110"
-                          >
-                            {item.char}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-start gap-2.5">
+                  <div
+                    className={`flex items-end gap-2 max-w-[88%] ${
+                      isOwn ? "flex-row-reverse" : "flex-row"
+                    }`}
+                  >
+                    {/* Profile Avatar (shown on left for other users, right for own) */}
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow"
+                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mb-0.5 shadow"
                       style={{
                         background: `linear-gradient(145deg, ${msg.avatarColor}, #111111 150%)`,
                       }}
@@ -2854,38 +2777,136 @@ export default function NetflixPlayer({
                       {renderProfileIcon(msg.avatarIcon, "w-4 h-4 text-white")}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span
-                          className={`font-bold truncate ${
-                            isOwn ? "text-white" : "text-zinc-200"
-                          }`}
+                    {/* Teams Chat Bubble */}
+                    <div
+                      className={`group/msg relative rounded-2xl px-3.5 py-2.5 shadow-md transition-colors border ${
+                        isOwn
+                          ? "bg-[#2b2d42] hover:bg-[#32354d] border-indigo-500/30 rounded-br-sm text-white"
+                          : "bg-[#1f1f23] hover:bg-[#26262b] border-zinc-800 rounded-bl-sm text-zinc-100"
+                      }`}
+                    >
+                      {/* Microsoft Teams Floating Hover Reaction & Action Toolbar */}
+                      {!isEditing && (
+                        <div
+                          className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-3.5 ${
+                            isOwn ? "right-2" : "left-2"
+                          } z-20 flex items-center gap-0.5 bg-[#1a1a1d] border border-zinc-700 rounded-full px-1.5 py-0.5 shadow-xl`}
                         >
-                          {msg.profileName}
+                          {QUICK_REACTIONS.map((emo) => (
+                            <button
+                              key={emo}
+                              type="button"
+                              onClick={() => handleToggleReaction(msg.id, emo)}
+                              className="hover:scale-125 transition-transform px-1 py-0.5 text-xs leading-none"
+                              title={`React ${emo}`}
+                            >
+                              {emo}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReactionPickerMsgId((prev) =>
+                                prev === msg.id ? null : msg.id
+                              )
+                            }
+                            className="p-1 text-zinc-400 hover:text-white rounded"
+                            title="More reactions"
+                          >
+                            <Smile className="w-3 h-3" />
+                          </button>
+                          {isOwn && (
+                            <>
+                              <div className="w-px h-3.5 bg-zinc-700 mx-0.5" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMessageId(msg.id);
+                                  setEditingText(msg.text);
+                                }}
+                                className="p-1 text-zinc-400 hover:text-white rounded"
+                                title="Edit message"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMessage(msg.id)}
+                                className="p-1 text-zinc-400 hover:text-red-400 rounded"
+                                title="Delete message"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Header Row: Sender Name + Timestamp */}
+                      <div
+                        className={`flex items-baseline gap-2 mb-0.5 ${
+                          isOwn ? "justify-end" : "justify-start"
+                        }`}
+                      >
+                        <span className="font-bold text-[11px] text-zinc-300 truncate">
+                          {isOwn ? "You" : msg.profileName}
                         </span>
                         <button
                           type="button"
                           onClick={() => seekTo(msg.videoTimestamp)}
-                          className="text-[10px] font-mono text-zinc-500 hover:text-[#E50914] transition-colors"
+                          className="text-[10px] font-mono text-zinc-400 hover:text-[#E50914] transition-colors"
                           title="Jump to this video timestamp"
                         >
                           {formatTime(msg.videoTimestamp)}
                         </button>
                         {msg.editedAt && (
-                          <span className="text-[10px] text-zinc-500 italic">
+                          <span className="text-[10px] text-zinc-400 italic">
                             Edited
                           </span>
                         )}
                       </div>
 
-                      {/* Inline Edit Form OR Message Text */}
+                      {/* Expanded Reaction Emoji Picker for this Message */}
+                      {reactionPickerMsgId === msg.id && (
+                        <div className="mt-2 mb-2 bg-[#161618] border border-zinc-700 rounded-xl p-2.5 shadow-2xl z-30 w-64">
+                          <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                            <span>React with any emoji</span>
+                            <button
+                              type="button"
+                              onClick={() => setReactionPickerMsgId(null)}
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 max-h-36 overflow-y-auto pr-1">
+                            {EMOJI_CATEGORIES.flatMap((c) => c.emojis).map(
+                              (item) => (
+                                <button
+                                  key={`react-${msg.id}-${item.char}`}
+                                  type="button"
+                                  onClick={() => {
+                                    handleToggleReaction(msg.id, item.char);
+                                    setReactionPickerMsgId(null);
+                                  }}
+                                  className="h-7 rounded hover:bg-zinc-800 flex items-center justify-center text-base transition-transform hover:scale-110"
+                                >
+                                  {item.char}
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Inline Edit Form OR Message Content */}
                       {isEditing ? (
                         <form
                           onSubmit={(e) => {
                             e.preventDefault();
                             handleSaveEditMessage(msg.id);
                           }}
-                          className="mt-1.5 space-y-1.5"
+                          className="mt-1.5 space-y-1.5 min-w-[200px]"
                         >
                           <input
                             type="text"
@@ -2916,7 +2937,7 @@ export default function NetflixPlayer({
                       ) : (
                         <>
                           {msg.text && (
-                            <p className="text-zinc-200 break-words leading-relaxed mt-1 whitespace-pre-wrap">
+                            <p className="text-zinc-100 break-words leading-relaxed whitespace-pre-wrap">
                               {msg.text}
                             </p>
                           )}
@@ -2937,40 +2958,42 @@ export default function NetflixPlayer({
                           )}
                         </>
                       )}
-
-                      {/* Reactions Pill Row */}
-                      {reactionEntries.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1 mt-2">
-                          {reactionEntries.map(([emo, users]) => {
-                            const hasMine = users.some(
-                              (u) => u.profileId === activeProfile.id
-                            );
-                            const names = users
-                              .map((u) => u.profileName)
-                              .join(", ");
-                            return (
-                              <button
-                                key={emo}
-                                type="button"
-                                onClick={() =>
-                                  handleToggleReaction(msg.id, emo)
-                                }
-                                title={`Reacted by: ${names}`}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
-                                  hasMine
-                                    ? "bg-[#E50914]/20 border-[#E50914] text-white font-semibold"
-                                    : "bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-600"
-                                }`}
-                              >
-                                <span>{emo}</span>
-                                <span>{users.length}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   </div>
+
+                  {/* Reactions Pill Row below Bubble */}
+                  {reactionEntries.length > 0 && (
+                    <div
+                      className={`flex flex-wrap items-center gap-1 mt-1 ${
+                        isOwn ? "pr-9 justify-end" : "pl-9 justify-start"
+                      }`}
+                    >
+                      {reactionEntries.map(([emo, users]) => {
+                        const hasMine = users.some(
+                          (u) => u.profileId === activeProfile.id
+                        );
+                        const names = users
+                          .map((u) => u.profileName)
+                          .join(", ");
+                        return (
+                          <button
+                            key={emo}
+                            type="button"
+                            onClick={() => handleToggleReaction(msg.id, emo)}
+                            title={`Reacted by: ${names}`}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                              hasMine
+                                ? "bg-indigo-500/25 border-indigo-400 text-white font-semibold"
+                                : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                            }`}
+                          >
+                            <span>{emo}</span>
+                            <span>{users.length}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })
