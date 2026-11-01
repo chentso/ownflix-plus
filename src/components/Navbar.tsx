@@ -6,15 +6,11 @@ import { renderProfileIcon } from "./ProfileGate";
 import {
   Search,
   X,
-  HardDrive,
   ChevronDown,
-  FolderSync,
   LogOut,
-  PlusCircle,
   KeyRound,
   Lock,
   Activity,
-  Users,
 } from "lucide-react";
 
 export type NavCategory = "HOME" | "SERIES" | "MOVIES" | "LOCAL" | "MY_LIST" | "PLAYLISTS";
@@ -175,18 +171,6 @@ export default function Navbar({
           )}
         </div>
 
-        {/* Localhost-Only Admin Settings Dashboard Button */}
-        {isLocalhost && (
-          <button
-            onClick={() => onOpenAdmin("activity")}
-            className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-1.5 rounded transition-colors"
-            title="Admin Settings Dashboard (Localhost Only)"
-          >
-            <Activity className="w-3.5 h-3.5 text-[#3B82F6]" />
-            <span>Admin Dashboard</span>
-          </button>
-        )}
-
         {/* Profile Dropdown */}
         <div
           className="relative"
@@ -268,51 +252,16 @@ export default function Navbar({
                 </button>
 
                 {isLocalhost && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onOpenAdmin("profiles");
-                      }}
-                      className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                    >
-                      <Users className="w-4 h-4 text-[#3B82F6]" />
-                      <span>Manage Profiles (Admin)</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onOpenAdmin("activity");
-                      }}
-                      className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                    >
-                      <Activity className="w-4 h-4 text-[#3B82F6]" />
-                      <span>Activity Logs (Admin)</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onOpenAdmin("folders");
-                      }}
-                      className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                    >
-                      <FolderSync className="w-4 h-4 text-zinc-400" />
-                      <span>Storage Locations</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onOpenAdmin("media");
-                      }}
-                      className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                    >
-                      <PlusCircle className="w-4 h-4 text-zinc-400" />
-                      <span>Edit Library & Posters</span>
-                    </button>
-                  </>
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      onOpenAdmin("profiles");
+                    }}
+                    className="w-full px-3 py-2 flex items-center gap-3 text-zinc-200 hover:text-white hover:bg-zinc-800/70 transition-colors font-medium"
+                  >
+                    <Activity className="w-4 h-4 text-[#3B82F6]" />
+                    <span>Admin Dashboard</span>
+                  </button>
                 )}
 
                 <div className="border-t border-zinc-800 my-1.5" />
