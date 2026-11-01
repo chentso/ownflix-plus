@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id            String          @id @default(cuid())
+  name          String
+  avatarColor   String          @default("#E50914")
+  avatarIcon    String          @default("smile")
+  isKids        Boolean         @default(false)
+  isAdmin       Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  watchProgress WatchProgress[]
+  myList        MyListItem[]
+}
+
+model LibraryFolder {
+  id            String    @id @default(cuid())
+  name          String
+  path          String    @unique
+  mediaType     String    @default("MIXED") // MOVIE, SERIES, MIXED
+  lastScannedAt DateTime?
+  itemCount     Int       @default(0)
+  createdAt     DateTime  @default(now())
+}
+
+model MediaItem {
+  id             String          @id @default(cuid())
+  title          String
+  overview       String
+  tagline        String?
+  type           String          @default("MOVIE") // MOVIE, SERIES
+  releaseYear    Int             @default(2024)
+  maturityRating String          @default("TV-MA")
+  genres         String          @default("Action, Sci-Fi")
+  cast           String          @default("")
+  director       String?
+  posterUrl      String
+  backdropUrl    String
+  videoUrl       String?
+  filePath       String?
+  duration       Int             @default(0) // in seconds
+  introStart     Int?            // in seconds
+  introEnd       Int?            // in seconds
+  creditsStart   Int?            // in seconds
+  matchScore     Int             @default(96)
+  isFeatured     Boolean         @default(false)
+  audioTracks    String          @default("English (5.1 Surround),English (Original Stereo)")
+  subtitleTracks String          @default("English [CC],Español,Français")
+  resolution     String          @default("4K Ultra HD")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  episodes       Episode[]
+  watchProgress  WatchProgress[]
+  myList         MyListItem[]
+}
+
+model Episode {
+  id            String          @id @default(cuid())
+  mediaItemId   String
+  mediaItem     MediaItem       @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  seasonNumber  Int             @default(1)
+  episodeNumber Int             @default(1)
+  title         String
+  overview      String
+  thumbnailUrl  String
+  videoUrl      String
+  filePath      String?
+  duration      Int             @default(0)
+  introStart    Int?
+  introEnd      Int?
+  creditsStart  Int?
+  createdAt     DateTime        @default(now())
+  watchProgress WatchProgress[]
+}
+
+model WatchProgress {
+  id              String    @id @default(cuid())
+  profileId       String
+  profile         Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItemId     String
+  mediaItem       MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  episodeId       String?
+  episode         Episode?  @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  positionSeconds Float     @default(0)
+  durationSeconds Float     @default(0)
+  completed       Boolean   @default(false)
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([profileId, mediaItemId])
+}
+
+model MyListItem {
+  id          String    @id @default(cuid())
+  profileId   String
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItemId String
+  mediaItem   MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([profileId, mediaItemId])
+}

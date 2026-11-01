@@ -1,0 +1,1387 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { MediaItem, Episode, Profile } from "@/types/ownflix";
+import {
+  ArrowLeft,
+  Play,
+  Pause,
+  RotateCcw,
+  RotateCw,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Minimize,
+  SkipForward,
+  Subtitles,
+  Gauge,
+  Layers,
+  Check,
+  Sparkles,
+  Wifi,
+  SlidersHorizontal,
+} from "lucide-react";
+
+interface NetflixPlayerProps {
+  item: MediaItem;
+  initialEpisode?: Episode;
+  startFromBeginning?: boolean;
+  activeProfile: Profile;
+  onClose: () => void;
+  onProgressUpdated: () => void;
+}
+
+interface CueItem {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export type StreamQualityMode =
+  | "auto"
+  | "original"
+  | "1080p"
+  | "720p"
+  | "480p"
+  | "360p";
+
+export type EffectiveQuality = "original" | "1080p" | "720p" | "480p" | "360p";
+
+const QUALITY_OPTIONS: {
+  id: StreamQualityMode;
+  label: string;
+  bitrate: string;
+  desc: string;
+}[] = [
+  {
+    id: "auto",
+    label: "Auto (Adaptive)",
+    bitrate: "Dynamic",
+    desc: "Automatically scales resolution for slower connections",
+  },
+  {
+    id: "original",
+    label: "Original / Direct",
+    bitrate: "Max Quality",
+    desc: "Uncompressed source or high-bitrate 1080p",
+  },
+  {
+    id: "1080p",
+    label: "1080p Full HD",
+    bitrate: "~4.5 Mbps",
+    desc: "Fast Wi-Fi or wired broadband",
+  },
+  {
+    id: "720p",
+    label: "720p HD",
+    bitrate: "~2.2 Mbps",
+    desc: "Balanced quality for moderate connections",
+  },
+  {
+    id: "480p",
+    label: "480p SD (Data Saver)",
+    bitrate: "~900 Kbps",
+    desc: "Smooth playback on slower connections",
+  },
+  {
+    id: "360p",
+    label: "360p Low Bandwidth",
+    bitrate: "~450 Kbps",
+    desc: "Fastest loading on weak Wi-Fi or mobile hotspots",
+  },
+];
+
+function detectInitialAutoQuality(): EffectiveQuality {
+  if (typeof navigator !== "undefined" && "connection" in navigator) {
+    const conn = (
+      navigator as unknown as {
+        connection?: { effectiveType?: string; downlink?: number; saveData?: boolean };
+      }
+    ).connection;
+    if (conn) {
+      if (conn.saveData) return "480p";
+      if (conn.effectiveType === "slow-2g" || conn.effectiveType === "2g") {
+        return "360p";
+      }
+      if (conn.effectiveType === "3g") {
+        return "480p";
+      }
+      if (typeof conn.downlink === "number" && conn.downlink > 0) {
+        if (conn.downlink < 1.0) return "360p";
+        if (conn.downlink < 2.2) return "480p";
+        if (conn.downlink < 5.0) return "720p";
+      }
+    }
+  }
+  return "original";
+}
+
+function parseTimeVtt(str: string): number {
+  const clean = str.trim().split(/\s+/)[0];
+  const parts = clean.split(":");
+  if (parts.length === 3) {
+    return (
+      parseFloat(parts[0]) * 3600 +
+      parseFloat(parts[1]) * 60 +
+      parseFloat(parts[2])
+    );
+  }
+  if (parts.length === 2) {
+    return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+  }
+  return 0;
+}
+
+function parseVtt(vttText: string): CueItem[] {
+  const blocks = vttText.replace(/\r\n/g, "\n").split("\n\n");
+  const cues: CueItem[] = [];
+  for (const block of blocks) {
+    const lines = block.trim().split("\n");
+    const arrowIdx = lines.findIndex((l) => l.includes("-->"));
+    if (arrowIdx !== -1) {
+      const [startRaw, endRaw] = lines[arrowIdx].split("-->");
+      const text = lines
+        .slice(arrowIdx + 1)
+        .join("\n")
+        .replace(/<[^>]+>/g, "")
+        .trim();
+      if (text) {
+        cues.push({
+          start: parseTimeVtt(startRaw),
+          end: parseTimeVtt(endRaw),
+          text,
+        });
+      }
+    }
+  }
+  return cues;
+}
+
+function formatTime(sec: number): string {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const hrs = Math.floor(sec / 3600);
+  const mins = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, "0")}:${String(s).padStart(
+      2,
+      "0"
+    )}`;
+  }
+  return `${mins}:${String(s).padStart(2, "0")}`;
+}
+
+export default function NetflixPlayer({
+  item,
+  initialEpisode,
+  startFromBeginning = false,
+  activeProfile,
+  onClose,
+  onProgressUpdated,
+}: NetflixPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrubBarRef = useRef<HTMLDivElement>(null);
+  const hideControlsTimer = useRef<NodeJS.Timeout | null>(null);
+  const stallCountRef = useRef<number>(0);
+
+  // Determine active episode if series
+  const [currentEpisode, setCurrentEpisode] = useState<Episode | undefined>(
+    () => {
+      if (initialEpisode) return initialEpisode;
+      if (item.type === "SERIES" && item.episodes.length > 0) {
+        if (item.progress?.episodeId) {
+          const matched = item.episodes.find(
+            (e) => e.id === item.progress?.episodeId
+          );
+          if (matched) return matched;
+        }
+        return item.episodes[0];
+      }
+      return undefined;
+    }
+  );
+
+  // Quality mode state ("auto" | "original" | "1080p" | "720p" | "480p" | "360p")
+  const [qualityMode, setQualityMode] = useState<StreamQualityMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem(
+        "ownflix_quality_mode"
+      ) as StreamQualityMode | null;
+      if (saved && QUALITY_OPTIONS.some((o) => o.id === saved)) {
+        return saved;
+      }
+    }
+    return "auto";
+  });
+
+  const [autoEffectiveQuality, setAutoEffectiveQuality] =
+    useState<EffectiveQuality>(() => detectInitialAutoQuality());
+  const [adaptiveBanner, setAdaptiveBanner] = useState<string | null>(null);
+
+  const effectiveQuality: EffectiveQuality =
+    qualityMode === "auto" ? autoEffectiveQuality : qualityMode;
+
+  const activeFilePath = currentEpisode?.filePath || item.filePath || null;
+  const isLocalFile = Boolean(activeFilePath);
+  const isContainerPiped = Boolean(
+    activeFilePath && /\.(mkv|avi|ts)$/i.test(activeFilePath)
+  );
+
+  // Whenever quality !== "original", or when playing MKV/AVI/TS, FFmpeg pipes the stream
+  const isPipedStream = isContainerPiped || effectiveQuality !== "original";
+
+  // Known duration from FFprobe in DB
+  const knownDuration =
+    (currentEpisode?.duration && currentEpisode.duration > 0
+      ? currentEpisode.duration
+      : item.duration && item.duration > 0
+      ? item.duration
+      : 0) || 600;
+
+  // Initial resume timestamp
+  const initialResumeSeconds = useMemo(() => {
+    if (startFromBeginning || !item.progress || item.progress.completed) {
+      return 0;
+    }
+    const sameEp =
+      !currentEpisode || item.progress.episodeId === currentEpisode.id;
+    if (sameEp && item.progress.positionSeconds > 2) {
+      return Math.floor(item.progress.positionSeconds);
+    }
+    return 0;
+  }, [startFromBeginning, item.progress, currentEpisode]);
+
+  // For piped FFmpeg streams (MKV/AVI/Transcode), streamOffset tracks the server-side -ss seek start
+  const [streamOffset, setStreamOffset] = useState<number>(() =>
+    isPipedStream ? initialResumeSeconds : 0
+  );
+
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [currentTime, setCurrentTime] = useState<number>(initialResumeSeconds);
+  const [duration, setDuration] = useState<number>(knownDuration);
+  const [bufferedEnd, setBufferedEnd] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+
+  // Interactive Scrubber Hover & Drag state
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverPercent, setHoverPercent] = useState<number>(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPreviewTime, setScrubPreviewTime] = useState<number | null>(null);
+
+  // Keep duration synced when switching episodes or items
+  useEffect(() => {
+    setDuration(knownDuration);
+  }, [knownDuration]);
+
+  // Popovers: "none" | "audioSub" | "speed" | "episodes" | "quality"
+  const [activePopover, setActivePopover] = useState<
+    "none" | "audioSub" | "speed" | "episodes" | "quality"
+  >("none");
+
+  const audioOptions = useMemo(
+    () =>
+      item.audioTracks
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    [item.audioTracks]
+  );
+
+  const subtitleOptions = useMemo(() => {
+    const rawTracks = item.subtitleTracks
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const counts: Record<string, number> = {};
+    const labeled = rawTracks.map((t) => {
+      counts[t] = (counts[t] || 0) + 1;
+      const totalSame = rawTracks.filter((x) => x === t).length;
+      return totalSame > 1 ? `${t} #${counts[t]}` : t;
+    });
+    return ["Off", ...labeled];
+  }, [item.subtitleTracks]);
+
+  const [selectedAudio, setSelectedAudio] = useState(
+    audioOptions[0] || "English (Original)"
+  );
+  const [selectedSubtitle, setSelectedSubtitle] = useState(
+    subtitleOptions[1] || "Off"
+  );
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [cues, setCues] = useState<CueItem[]>([]);
+  const [creditsDismissed, setCreditsDismissed] = useState(false);
+  const [nextCountdown, setNextCountdown] = useState<number | null>(null);
+
+  // Build stream URL with quality preset & start offset
+  const streamUrl = useMemo(() => {
+    const apiBase = currentEpisode
+      ? `/api/stream?episodeId=${currentEpisode.id}`
+      : `/api/stream?mediaId=${item.id}`;
+
+    const directUrl = currentEpisode
+      ? currentEpisode.filePath
+        ? apiBase
+        : currentEpisode.videoUrl
+      : item.filePath
+      ? apiBase
+      : item.videoUrl || "";
+
+    // If user selected a lower quality transcode preset, route even remote streams through /api/stream
+    const base =
+      effectiveQuality !== "original" && !directUrl.startsWith("/api/stream")
+        ? apiBase
+        : directUrl;
+
+    if (!base.startsWith("/api/stream")) {
+      return base;
+    }
+
+    const params: string[] = [];
+    if (effectiveQuality !== "original") {
+      params.push(`quality=${effectiveQuality}`);
+      params.push("transcode=1");
+    }
+    if (isPipedStream && streamOffset > 0) {
+      params.push(`start=${Math.floor(streamOffset)}`);
+    }
+    return params.length > 0 ? `${base}&${params.join("&")}` : base;
+  }, [currentEpisode, item, effectiveQuality, isPipedStream, streamOffset]);
+
+  // Switch quality mode while preserving exact playback timestamp
+  const handleSelectQuality = useCallback(
+    (newMode: StreamQualityMode) => {
+      const targetEffective: EffectiveQuality =
+        newMode === "auto" ? detectInitialAutoQuality() : newMode;
+      const nextWillBePiped =
+        isContainerPiped || targetEffective !== "original";
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("ownflix_quality_mode", newMode);
+      }
+
+      setBufferedEnd(0);
+      if (nextWillBePiped) {
+        setStreamOffset(Math.floor(currentTime));
+      } else {
+        setStreamOffset(0);
+      }
+
+      if (newMode === "auto") {
+        setAutoEffectiveQuality(targetEffective);
+      }
+      setQualityMode(newMode);
+      setActivePopover("none");
+    },
+    [currentTime, isContainerPiped]
+  );
+
+  // Auto-Adaptive step-down if video stalls repeatedly on a slow connection
+  const handleVideoWaiting = useCallback(() => {
+    if (qualityMode !== "auto") return;
+    stallCountRef.current += 1;
+    if (stallCountRef.current < 2) return;
+    stallCountRef.current = 0;
+
+    const ladder: EffectiveQuality[] = [
+      "original",
+      "1080p",
+      "720p",
+      "480p",
+      "360p",
+    ];
+    const idx = ladder.indexOf(autoEffectiveQuality);
+    if (idx !== -1 && idx + 1 < ladder.length) {
+      const nextQual = ladder[idx + 1];
+      setBufferedEnd(0);
+      setStreamOffset(Math.floor(currentTime));
+      setAutoEffectiveQuality(nextQual);
+      setAdaptiveBanner(
+        `Slow connection detected — switched to ${nextQual} transcoding for smooth playback.`
+      );
+      setTimeout(() => setAdaptiveBanner(null), 5000);
+    }
+  }, [qualityMode, autoEffectiveQuality, currentTime]);
+
+  // Intro & Credits timestamps
+  const introStart = currentEpisode
+    ? currentEpisode.introStart ?? 2
+    : item.introStart ?? 5;
+  const introEnd = currentEpisode
+    ? currentEpisode.introEnd ?? 15
+    : item.introEnd ?? 40;
+  const creditsStart = currentEpisode
+    ? currentEpisode.creditsStart ?? Math.max(duration - 8, 10)
+    : item.creditsStart ?? Math.max(duration - 35, 30);
+
+  // Next episode in series (if applicable)
+  const nextEpisode = useMemo(() => {
+    if (item.type !== "SERIES" || !currentEpisode) return undefined;
+    const idx = item.episodes.findIndex((e) => e.id === currentEpisode.id);
+    if (idx !== -1 && idx + 1 < item.episodes.length) {
+      return item.episodes[idx + 1];
+    }
+    return undefined;
+  }, [item, currentEpisode]);
+
+  // Load WebVTT captions when subtitle language changes
+  useEffect(() => {
+    if (selectedSubtitle === "Off") {
+      setCues([]);
+      return;
+    }
+    const subIdx = Math.max(0, subtitleOptions.indexOf(selectedSubtitle) - 1);
+    const controller = new AbortController();
+    fetch(
+      `/api/subtitles?mediaId=${item.id}${
+        currentEpisode ? `&episodeId=${currentEpisode.id}` : ""
+      }&trackIndex=${subIdx}&lang=${encodeURIComponent(
+        selectedSubtitle
+      )}&title=${encodeURIComponent(item.title)}`,
+      { signal: controller.signal }
+    )
+      .then((r) => r.text())
+      .then((text) => {
+        setCues(parseVtt(text));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [
+    item.id,
+    item.title,
+    currentEpisode,
+    selectedSubtitle,
+    subtitleOptions,
+  ]);
+
+  // Save watch progress helper
+  const saveProgress = useCallback(
+    async (pos: number, dur: number, completed = false) => {
+      try {
+        await fetch("/api/progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profileId: activeProfile.id,
+            mediaItemId: item.id,
+            episodeId: currentEpisode?.id || null,
+            positionSeconds: pos,
+            durationSeconds: dur || duration || knownDuration,
+            completed,
+          }),
+        });
+      } catch {
+        // Ignore network errors during background progress ping
+      }
+    },
+    [activeProfile.id, item.id, currentEpisode?.id, duration, knownDuration]
+  );
+
+  // Unified seek function that works for both HTTP 206 Range streams AND live FFmpeg streams
+  const seekTo = useCallback(
+    (targetSec: number) => {
+      const clamped = Math.max(
+        0,
+        Math.min(duration || knownDuration, targetSec)
+      );
+      const v = videoRef.current;
+
+      if (isPipedStream) {
+        const relTarget = clamped - streamOffset;
+        if (v && relTarget >= 0 && relTarget <= bufferedEnd - 0.5) {
+          v.currentTime = relTarget;
+          setCurrentTime(clamped);
+        } else {
+          setBufferedEnd(0);
+          setStreamOffset(Math.floor(clamped));
+          setCurrentTime(clamped);
+        }
+      } else {
+        if (v) {
+          v.currentTime = clamped;
+        }
+        setCurrentTime(clamped);
+      }
+    },
+    [duration, knownDuration, isPipedStream, streamOffset, bufferedEnd]
+  );
+
+  const seekBy = useCallback(
+    (delta: number) => {
+      seekTo(currentTime + delta);
+    },
+    [currentTime, seekTo]
+  );
+
+  // Set initial resume position when video metadata loads
+  const handleLoadedMetadata = () => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    if (
+      !isPipedStream &&
+      v.duration &&
+      isFinite(v.duration) &&
+      v.duration >= Math.max(5, knownDuration * 0.5)
+    ) {
+      setDuration(v.duration);
+    } else {
+      setDuration(knownDuration);
+    }
+
+    v.playbackRate = playbackSpeed;
+    v.volume = volume;
+    v.muted = isMuted;
+
+    if (!isPipedStream && currentTime > 2 && v.currentTime < 1) {
+      v.currentTime = currentTime;
+    }
+
+    v.play().catch(() => setIsPlaying(false));
+  };
+
+  // Periodic progress save every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const v = videoRef.current;
+      if (v && !v.paused) {
+        const realTime = isPipedStream
+          ? streamOffset + v.currentTime
+          : v.currentTime;
+        if (realTime > 1) {
+          saveProgress(realTime, duration || knownDuration);
+        }
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [saveProgress, duration, knownDuration, isPipedStream, streamOffset]);
+
+  // Auto-hide HUD controls after 3s of mouse inactivity
+  const revealControls = useCallback(() => {
+    setShowControls(true);
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    hideControlsTimer.current = setTimeout(() => {
+      if (activePopover === "none" && !isScrubbing) {
+        setShowControls(false);
+      }
+    }, 3200);
+  }, [activePopover, isScrubbing]);
+
+  useEffect(() => {
+    revealControls();
+    return () => {
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    };
+  }, [revealControls]);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      v.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      v.pause();
+      setIsPlaying(false);
+      const realTime = isPipedStream
+        ? streamOffset + v.currentTime
+        : v.currentTime;
+      saveProgress(realTime, duration || knownDuration);
+    }
+  }, [saveProgress, duration, knownDuration, isPipedStream, streamOffset]);
+
+  const handleSkipIntro = useCallback(() => {
+    seekTo(introEnd);
+  }, [introEnd, seekTo]);
+
+  const handlePlayEpisode = useCallback((ep: Episode) => {
+    setCreditsDismissed(false);
+    setNextCountdown(null);
+    setStreamOffset(0);
+    setBufferedEnd(0);
+    setCurrentEpisode(ep);
+    setCurrentTime(0);
+    setDuration(ep.duration || 600);
+    setActivePopover("none");
+  }, []);
+
+  // Mouse drag scrubbing support across the document
+  useEffect(() => {
+    if (!isScrubbing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!scrubBarRef.current) return;
+      const rect = scrubBarRef.current.getBoundingClientRect();
+      const ratio = Math.max(
+        0,
+        Math.min(1, (e.clientX - rect.left) / rect.width)
+      );
+      const target = ratio * (duration || knownDuration);
+      setScrubPreviewTime(target);
+      setHoverTime(target);
+      setHoverPercent(ratio * 100);
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (scrubBarRef.current) {
+        const rect = scrubBarRef.current.getBoundingClientRect();
+        const ratio = Math.max(
+          0,
+          Math.min(1, (e.clientX - rect.left) / rect.width)
+        );
+        const target = ratio * (duration || knownDuration);
+        seekTo(target);
+      }
+      setIsScrubbing(false);
+      setScrubPreviewTime(null);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isScrubbing, duration, knownDuration, seekTo]);
+
+  // Next Episode Countdown trigger when reaching creditsStart
+  const inCreditsWindow =
+    Boolean(nextEpisode) &&
+    !creditsDismissed &&
+    duration > 10 &&
+    currentTime >= creditsStart;
+
+  useEffect(() => {
+    if (!inCreditsWindow || !nextEpisode) {
+      setNextCountdown(null);
+      return;
+    }
+    setNextCountdown(5);
+    const timer = setInterval(() => {
+      setNextCountdown((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(timer);
+          handlePlayEpisode(nextEpisode);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [inCreditsWindow, nextEpisode, handlePlayEpisode]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (activePopover !== "none") {
+          setActivePopover("none");
+        } else {
+          saveProgress(currentTime, duration || knownDuration);
+          onProgressUpdated();
+          onClose();
+        }
+      } else if (e.key === " " || e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === "ArrowLeft" || e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        seekBy(-10);
+      } else if (e.key === "ArrowRight" || e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        seekBy(10);
+      } else if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        if (videoRef.current) {
+          videoRef.current.muted = !isMuted;
+          setIsMuted(!isMuted);
+        }
+      } else if (e.key.toLowerCase() === "s") {
+        handleSkipIntro();
+      }
+      revealControls();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    activePopover,
+    currentTime,
+    duration,
+    knownDuration,
+    handleSkipIntro,
+    isMuted,
+    onClose,
+    onProgressUpdated,
+    revealControls,
+    saveProgress,
+    seekBy,
+    toggleFullscreen,
+    togglePlay,
+  ]);
+
+  const handleExit = async () => {
+    if (currentTime > 1) {
+      await saveProgress(currentTime, duration || knownDuration);
+    }
+    onProgressUpdated();
+    onClose();
+  };
+
+  // Active subtitle cue
+  const activeCue = useMemo(() => {
+    if (selectedSubtitle === "Off" || cues.length === 0) return null;
+    const lookupTime =
+      cues.length > 10 || isLocalFile ? currentTime : currentTime % 65;
+    return (
+      cues.find((c) => lookupTime >= c.start && lookupTime <= c.end) || null
+    );
+  }, [cues, currentTime, selectedSubtitle, isLocalFile]);
+
+  const showSkipIntroButton =
+    currentTime >= introStart && currentTime <= introEnd;
+
+  const displayedTime =
+    isScrubbing && scrubPreviewTime !== null ? scrubPreviewTime : currentTime;
+
+  const progressPercent =
+    duration > 0
+      ? Math.min(100, Math.max(0, (displayedTime / duration) * 100))
+      : 0;
+
+  const totalBufferedSec = isPipedStream
+    ? streamOffset + bufferedEnd
+    : bufferedEnd;
+  const bufferedPercent =
+    duration > 0
+      ? Math.min(
+          100,
+          Math.max(progressPercent, (totalBufferedSec / duration) * 100)
+        )
+      : 0;
+
+  const qualityBadgeLabel =
+    qualityMode === "auto"
+      ? `Auto (${
+          effectiveQuality === "original"
+            ? isContainerPiped
+              ? "1080p"
+              : "Direct"
+            : effectiveQuality
+        })`
+      : effectiveQuality === "original"
+      ? isContainerPiped
+        ? "1080p Transcode"
+        : "Direct Play"
+      : `${effectiveQuality} Transcode`;
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseMove={revealControls}
+      className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden select-none"
+    >
+      {/* HTML5 Video Element */}
+      <video
+        ref={videoRef}
+        key={`${streamUrl}-${currentEpisode?.id || "movie"}`}
+        src={streamUrl}
+        onClick={() => {
+          if (activePopover !== "none") {
+            setActivePopover("none");
+          } else {
+            togglePlay();
+          }
+        }}
+        onLoadedMetadata={handleLoadedMetadata}
+        onWaiting={handleVideoWaiting}
+        onTimeUpdate={(e) => {
+          if (isScrubbing) return;
+          const v = e.currentTarget;
+          const actual = isPipedStream
+            ? streamOffset + v.currentTime
+            : v.currentTime;
+          setCurrentTime(actual);
+          if (v.buffered.length > 0) {
+            setBufferedEnd(v.buffered.end(v.buffered.length - 1));
+          }
+        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          if (isPipedStream && currentTime < duration - 15) {
+            return;
+          }
+          saveProgress(duration, duration, true);
+          if (nextEpisode) {
+            handlePlayEpisode(nextEpisode);
+          } else {
+            setIsPlaying(false);
+          }
+        }}
+        className="absolute inset-0 w-full h-full object-contain bg-black cursor-pointer"
+        playsInline
+        autoPlay
+      />
+
+      {/* Top Bar Overlay */}
+      <div
+        className={`relative z-20 flex items-center justify-between px-6 md:px-10 py-6 bg-gradient-to-b from-black/85 via-black/40 to-transparent transition-opacity duration-300 ${
+          showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <button
+          onClick={handleExit}
+          className="flex items-center gap-3 text-white hover:text-zinc-300 transition-colors group"
+        >
+          <ArrowLeft className="w-7 h-7 group-hover:-translate-x-1 transition-transform" />
+          <div className="text-left">
+            <div className="text-lg md:text-xl font-bold leading-tight">
+              {item.title}
+            </div>
+            {currentEpisode && (
+              <div className="text-xs md:text-sm text-zinc-300">
+                Season {currentEpisode.seasonNumber} • Episode{" "}
+                {currentEpisode.episodeNumber}: &ldquo;{currentEpisode.title}
+                &rdquo;
+              </div>
+            )}
+          </div>
+        </button>
+
+        {/* Right Top: Stream Quality & Bandwidth Badge */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() =>
+              setActivePopover((p) => (p === "quality" ? "none" : "quality"))
+            }
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
+              effectiveQuality !== "original"
+                ? "bg-[#E50914] border-[#E50914] text-white"
+                : "bg-black/60 border-zinc-600 text-zinc-200 hover:border-white"
+            }`}
+            title="Change Transcoding Quality for Slower Connections"
+          >
+            <Wifi className="w-3.5 h-3.5" />
+            <span>Quality: {qualityBadgeLabel}</span>
+          </button>
+
+          {!showSkipIntroButton && currentTime < introEnd && (
+            <button
+              onClick={handleSkipIntro}
+              className="hidden sm:flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 text-xs text-zinc-200 px-3 py-1.5 rounded transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#E50914]" />
+              <span>Jump Intro</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Auto-Adaptive Slow Connection Toast */}
+      {adaptiveBanner && (
+        <div className="relative z-30 mx-auto bg-black/85 border border-amber-500/60 text-amber-200 text-xs sm:text-sm px-4 py-2 rounded-full shadow-xl flex items-center gap-2">
+          <Wifi className="w-4 h-4 text-amber-400" />
+          <span>{adaptiveBanner}</span>
+        </div>
+      )}
+
+      {/* Active Subtitle Overlay */}
+      {activeCue && (
+        <div className="relative z-10 mt-auto mb-28 px-6 text-center pointer-events-none">
+          <span className="inline-block bg-black/75 text-white text-base sm:text-xl md:text-2xl font-medium px-4 py-1.5 rounded shadow-lg whitespace-pre-line leading-snug">
+            {activeCue.text}
+          </span>
+        </div>
+      )}
+
+      {/* Floating Netflix "Skip Intro" Button */}
+      {showSkipIntroButton && (
+        <div className="absolute right-8 md:right-12 bottom-28 z-30">
+          <button
+            onClick={handleSkipIntro}
+            className="bg-white/95 hover:bg-white text-black font-bold text-sm md:text-base px-6 py-2.5 rounded shadow-2xl border-2 border-white flex items-center gap-2 transition-transform hover:scale-105"
+          >
+            <span>Skip Intro</span>
+            <SkipForward className="w-4 h-4 fill-black" />
+          </button>
+        </div>
+      )}
+
+      {/* Floating Netflix "Next Episode" Countdown Overlay */}
+      {inCreditsWindow && nextEpisode && (
+        <div className="absolute right-8 md:right-12 bottom-28 z-30 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 md:w-96 backdrop-blur-md">
+          <div className="text-xs uppercase tracking-wider text-zinc-400 font-bold mb-1">
+            Up Next in {nextCountdown ?? 5}s
+          </div>
+          <div className="text-sm font-bold text-white truncate mb-3">
+            S{nextEpisode.seasonNumber}:E{nextEpisode.episodeNumber} &ldquo;
+            {nextEpisode.title}&rdquo;
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setCreditsDismissed(true)}
+              className="flex-1 py-2 text-xs font-semibold border border-zinc-600 hover:border-white text-zinc-200 rounded transition-colors"
+            >
+              Watch Credits
+            </button>
+            <button
+              onClick={() => handlePlayEpisode(nextEpisode)}
+              className="flex-1 py-2 text-xs font-bold bg-white hover:bg-zinc-200 text-black rounded flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Play className="w-3.5 h-3.5 fill-black" />
+              <span>Next Episode</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Popovers (Quality/Bandwidth, Audio/Subtitles, Playback Speed, Episodes List) */}
+      {activePopover === "quality" && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 backdrop-blur-md"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+              Video Quality & Data Saver
+            </h4>
+            <span className="text-[11px] text-emerald-400 font-semibold">
+              FFmpeg Real-Time Transcoder
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            {QUALITY_OPTIONS.map((opt) => {
+              const selected = qualityMode === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => handleSelectQuality(opt.id)}
+                  className={`w-full text-left p-2.5 rounded-lg flex items-start justify-between gap-3 transition-colors ${
+                    selected
+                      ? "bg-zinc-800 border border-zinc-600 text-white"
+                      : "hover:bg-zinc-800/60 text-zinc-300 border border-transparent"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold">{opt.label}</span>
+                      <span className="text-[11px] bg-zinc-900 border border-zinc-700 text-zinc-300 px-1.5 py-0.2 rounded">
+                        {opt.bitrate}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">{opt.desc}</p>
+                  </div>
+                  {selected && (
+                    <Check className="w-4 h-4 text-[#E50914] shrink-0 mt-1" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activePopover === "audioSub" && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-5 shadow-2xl w-[340px] sm:w-[440px] grid grid-cols-2 gap-6 backdrop-blur-md"
+        >
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+              Audio
+            </h4>
+            <div className="space-y-1.5">
+              {audioOptions.map((aud) => (
+                <button
+                  key={aud}
+                  onClick={() => setSelectedAudio(aud)}
+                  className={`w-full text-left text-xs sm:text-sm py-1.5 px-2 rounded flex items-center gap-2 ${
+                    selectedAudio === aud
+                      ? "text-white font-bold bg-zinc-800"
+                      : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  <Check
+                    className={`w-4 h-4 shrink-0 ${
+                      selectedAudio === aud ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
+                  <span className="truncate">{aud}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+              Subtitles
+            </h4>
+            <div className="space-y-1.5">
+              {subtitleOptions.map((sub) => (
+                <button
+                  key={sub}
+                  onClick={() => setSelectedSubtitle(sub)}
+                  className={`w-full text-left text-xs sm:text-sm py-1.5 px-2 rounded flex items-center gap-2 ${
+                    selectedSubtitle === sub
+                      ? "text-white font-bold bg-zinc-800"
+                      : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  <Check
+                    className={`w-4 h-4 shrink-0 ${
+                      selectedSubtitle === sub ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
+                  <span className="truncate">{sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activePopover === "speed" && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-56 backdrop-blur-md"
+        >
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+            Playback Speed
+          </h4>
+          <div className="space-y-1">
+            {[0.5, 0.75, 1, 1.25, 1.5, 2].map((spd) => (
+              <button
+                key={spd}
+                onClick={() => {
+                  setPlaybackSpeed(spd);
+                  if (videoRef.current) videoRef.current.playbackRate = spd;
+                  setActivePopover("none");
+                }}
+                className={`w-full text-left text-sm py-1.5 px-2.5 rounded flex items-center justify-between ${
+                  playbackSpeed === spd
+                    ? "text-white font-bold bg-zinc-800"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                <span>{spd === 1 ? "1x (Normal)" : `${spd}x`}</span>
+                {playbackSpeed === spd && <Check className="w-4 h-4" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activePopover === "episodes" && item.type === "SERIES" && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 max-h-[380px] overflow-y-auto backdrop-blur-md"
+        >
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+            {item.title} • Episodes
+          </h4>
+          <div className="space-y-2">
+            {item.episodes.map((ep) => {
+              const active = currentEpisode?.id === ep.id;
+              return (
+                <button
+                  key={ep.id}
+                  onClick={() => handlePlayEpisode(ep)}
+                  className={`w-full text-left p-2.5 rounded flex items-center gap-3 transition-colors ${
+                    active
+                      ? "bg-zinc-800 border border-zinc-600"
+                      : "hover:bg-zinc-800/60"
+                  }`}
+                >
+                  <div className="w-7 text-center font-bold text-sm text-zinc-400">
+                    {ep.episodeNumber}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-white truncate">
+                      {ep.title}
+                    </div>
+                    <div className="text-xs text-zinc-400 line-clamp-1">
+                      {ep.overview}
+                    </div>
+                  </div>
+                  {active && (
+                    <span className="text-[10px] font-bold bg-[#E50914] text-white px-1.5 py-0.5 rounded">
+                      NOW
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Controls Bar */}
+      <div
+        className={`relative z-20 px-6 md:px-10 pb-6 pt-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent transition-opacity duration-300 ${
+          showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        {/* Netflix Red Timeline Scrubber */}
+        <div className="flex items-center gap-4 mb-4">
+          <div
+            ref={scrubBarRef}
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const ratio = Math.max(
+                0,
+                Math.min(1, (e.clientX - rect.left) / rect.width)
+              );
+              setHoverPercent(ratio * 100);
+              setHoverTime(ratio * (duration || knownDuration));
+            }}
+            onMouseLeave={() => {
+              if (!isScrubbing) setHoverTime(null);
+            }}
+            onMouseDown={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const ratio = Math.max(
+                0,
+                Math.min(1, (e.clientX - rect.left) / rect.width)
+              );
+              const target = ratio * (duration || knownDuration);
+              setIsScrubbing(true);
+              setScrubPreviewTime(target);
+              setHoverPercent(ratio * 100);
+              setHoverTime(target);
+            }}
+            className="group/scrub relative flex-1 py-2 cursor-pointer"
+          >
+            {/* Hover Time Preview Tooltip */}
+            {hoverTime !== null && (
+              <div
+                className="absolute -top-8 -translate-x-1/2 bg-black/90 border border-zinc-700 text-white text-xs font-mono font-semibold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap"
+                style={{
+                  left: `${Math.max(3, Math.min(97, hoverPercent))}%`,
+                }}
+              >
+                {formatTime(hoverTime)}
+              </div>
+            )}
+
+            {/* Track Background */}
+            <div className="relative w-full h-1.5 group-hover/scrub:h-2.5 bg-zinc-700/80 rounded-full transition-all overflow-visible">
+              {/* Buffered Bar */}
+              <div
+                className="absolute inset-y-0 left-0 bg-zinc-500/60 rounded-full"
+                style={{ width: `${bufferedPercent}%` }}
+              />
+              {/* Played Red Bar */}
+              <div
+                className="absolute inset-y-0 left-0 bg-[#E50914] rounded-full"
+                style={{ width: `${progressPercent}%` }}
+              />
+              {/* Scrubber Thumb */}
+              <div
+                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#E50914] shadow-lg transition-transform ${
+                  isScrubbing
+                    ? "scale-125"
+                    : "scale-0 group-hover/scrub:scale-100"
+                }`}
+                style={{ left: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+
+          <span className="text-xs sm:text-sm font-mono text-zinc-200 min-w-[110px] sm:min-w-[130px] text-right shrink-0">
+            {formatTime(displayedTime)} / {formatTime(duration)}
+          </span>
+        </div>
+
+        {/* Controls Row */}
+        <div className="flex items-center justify-between">
+          {/* Left Controls */}
+          <div className="flex items-center gap-4 md:gap-6">
+            <button
+              onClick={togglePlay}
+              className="text-white hover:text-zinc-300 transition-transform hover:scale-110"
+              title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+            >
+              {isPlaying ? (
+                <Pause className="w-7 h-7 fill-white" />
+              ) : (
+                <Play className="w-7 h-7 fill-white" />
+              )}
+            </button>
+
+            <button
+              onClick={() => seekBy(-10)}
+              className="text-white hover:text-zinc-300 transition-transform hover:scale-110"
+              title="Rewind 10s (Left Arrow)"
+            >
+              <RotateCcw className="w-6 h-6" />
+            </button>
+
+            <button
+              onClick={() => seekBy(10)}
+              className="text-white hover:text-zinc-300 transition-transform hover:scale-110"
+              title="Forward 10s (Right Arrow)"
+            >
+              <RotateCw className="w-6 h-6" />
+            </button>
+
+            {/* Volume Control */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (!videoRef.current) return;
+                  videoRef.current.muted = !isMuted;
+                  setIsMuted(!isMuted);
+                }}
+                className="text-white hover:text-zinc-300"
+                title="Mute (M)"
+              >
+                {isMuted || volume === 0 ? (
+                  <VolumeX className="w-6 h-6" />
+                ) : (
+                  <Volume2 className="w-6 h-6" />
+                )}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={isMuted ? 0 : volume}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setVolume(val);
+                  setIsMuted(val === 0);
+                  if (videoRef.current) {
+                    videoRef.current.volume = val;
+                    videoRef.current.muted = val === 0;
+                  }
+                }}
+                className="hidden sm:block w-20 accent-[#E50914] cursor-pointer"
+              />
+            </div>
+
+            {/* Center Title Label */}
+            <div className="hidden lg:flex items-center gap-2 text-sm text-zinc-200 pl-2">
+              <span className="font-bold">{item.title}</span>
+              {currentEpisode && (
+                <span className="text-zinc-400">
+                  S{currentEpisode.seasonNumber}:E
+                  {currentEpisode.episodeNumber} {currentEpisode.title}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Right Controls */}
+          <div className="flex items-center gap-4 md:gap-5">
+            {nextEpisode && (
+              <button
+                onClick={() => handlePlayEpisode(nextEpisode)}
+                className="text-white hover:text-zinc-300 flex items-center gap-1.5 text-xs font-semibold"
+                title={`Next Episode: ${nextEpisode.title}`}
+              >
+                <SkipForward className="w-6 h-6" />
+                <span className="hidden md:inline">Next Ep</span>
+              </button>
+            )}
+
+            {item.type === "SERIES" && item.episodes.length > 0 && (
+              <button
+                onClick={() =>
+                  setActivePopover((p) =>
+                    p === "episodes" ? "none" : "episodes"
+                  )
+                }
+                className={`hover:text-white transition-colors ${
+                  activePopover === "episodes"
+                    ? "text-[#E50914]"
+                    : "text-white"
+                }`}
+                title="Episodes"
+              >
+                <Layers className="w-6 h-6" />
+              </button>
+            )}
+
+            <button
+              onClick={() =>
+                setActivePopover((p) =>
+                  p === "audioSub" ? "none" : "audioSub"
+                )
+              }
+              className={`hover:text-white transition-colors ${
+                activePopover === "audioSub" ? "text-[#E50914]" : "text-white"
+              }`}
+              title="Audio & Subtitles"
+            >
+              <Subtitles className="w-6 h-6" />
+            </button>
+
+            <button
+              onClick={() =>
+                setActivePopover((p) =>
+                  p === "quality" ? "none" : "quality"
+                )
+              }
+              className={`hover:text-white transition-colors flex items-center gap-1 ${
+                activePopover === "quality" ? "text-[#E50914]" : "text-white"
+              }`}
+              title="Video Quality & Data Saver"
+            >
+              <SlidersHorizontal className="w-6 h-6" />
+              {effectiveQuality !== "original" && (
+                <span className="text-xs font-bold">{effectiveQuality}</span>
+              )}
+            </button>
+
+            <button
+              onClick={() =>
+                setActivePopover((p) => (p === "speed" ? "none" : "speed"))
+              }
+              className={`hover:text-white transition-colors flex items-center gap-1 ${
+                activePopover === "speed" ? "text-[#E50914]" : "text-white"
+              }`}
+              title="Playback Speed"
+            >
+              <Gauge className="w-6 h-6" />
+              {playbackSpeed !== 1 && (
+                <span className="text-xs font-bold">{playbackSpeed}x</span>
+              )}
+            </button>
+
+            <button
+              onClick={toggleFullscreen}
+              className="text-white hover:text-zinc-300"
+              title="Fullscreen (F)"
+            >
+              {isFullscreen ? (
+                <Minimize className="w-6 h-6" />
+              ) : (
+                <Maximize className="w-6 h-6" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
