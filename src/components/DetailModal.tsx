@@ -272,12 +272,6 @@ export default function DetailModal({
                 </span>
               </div>
 
-              {item.tagline && (
-                <p className="text-zinc-300 italic text-sm mb-2">
-                  &ldquo;{item.tagline}&rdquo;
-                </p>
-              )}
-
               <p className="text-zinc-200 text-sm md:text-base leading-relaxed mb-5">
                 {item.overview}
               </p>

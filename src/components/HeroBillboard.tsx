@@ -83,12 +83,7 @@ export default function HeroBillboard({
           )}
         </div>
 
-        {/* Tagline & Synopsis */}
-        {item.tagline && (
-          <p className="text-zinc-200 font-semibold italic text-sm md:text-base mb-1.5 drop-shadow">
-            &ldquo;{item.tagline}&rdquo;
-          </p>
-        )}
+        {/* Synopsis */}
         <p className="text-zinc-200/90 text-sm md:text-base line-clamp-3 leading-relaxed max-w-2xl mb-6 drop-shadow">
           {item.overview}
         </p>
