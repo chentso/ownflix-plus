@@ -61,6 +61,7 @@ model MediaItem {
   backdropUrl    String
   videoUrl       String?
   filePath       String?
+  fileSignature  String?         // "<size>:<mtimeMs>" cache key to avoid re-running intro detection unless file changed
   duration       Int             @default(0) // in seconds
   introStart     Int?            // in seconds
   introEnd       Int?            // in seconds
@@ -88,6 +89,7 @@ model Episode {
   thumbnailUrl  String
   videoUrl      String
   filePath      String?
+  fileSignature String?         // "<size>:<mtimeMs>" cache key to avoid re-running intro detection unless file changed
   duration      Int             @default(0)
   introStart    Int?
   introEnd      Int?

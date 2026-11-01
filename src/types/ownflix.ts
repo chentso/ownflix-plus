@@ -18,6 +18,7 @@ export interface Episode {
   thumbnailUrl: string;
   videoUrl: string;
   filePath: string | null;
+  fileSignature?: string | null;
   duration: number;
   introStart: number | null;
   introEnd: number | null;
@@ -51,6 +52,7 @@ export interface MediaItem {
   backdropUrl: string;
   videoUrl: string | null;
   filePath: string | null;
+  fileSignature?: string | null;
   duration: number;
   introStart: number | null;
   introEnd: number | null;

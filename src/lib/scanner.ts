@@ -4,6 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { prisma } from "./prisma";
 import { fetchImdbMetadata } from "./imdb";
+import { computeFileSignature, detectVideoIntro } from "./introDetector";
 
 const execFileAsync = promisify(execFile);
 
@@ -275,7 +276,7 @@ export async function scanLibraryFolder(folderId: string): Promise<{
         parsed.season !== undefined &&
         parsed.episode !== undefined);
 
-    const probe = await probeMediaFile(filePath);
+    const currentSig = computeFileSignature(filePath);
     const idx = hashString(parsed.title);
     const defaultPoster = FALLBACK_POSTERS[idx % FALLBACK_POSTERS.length];
     const defaultBackdrop = FALLBACK_BACKDROPS[idx % FALLBACK_BACKDROPS.length];
@@ -293,6 +294,7 @@ export async function scanLibraryFolder(folderId: string): Promise<{
       });
 
       if (!series) {
+        const probe = await probeMediaFile(filePath);
         const imdb = await fetchImdbMetadata(seriesTitle, parsed.year);
         series = await prisma.mediaItem.create({
           data: {
@@ -324,7 +326,48 @@ export async function scanLibraryFolder(folderId: string): Promise<{
         where: { filePath },
       });
 
-      if (!existingEp) {
+      if (existingEp) {
+        // Caching: Only re-process if the video file has completely changed on disk
+        const fileHasChanged =
+          !existingEp.fileSignature || existingEp.fileSignature !== currentSig;
+
+        if (fileHasChanged) {
+          const probe = await probeMediaFile(filePath);
+          const siblingPaths = videoFiles.filter(
+            (p) =>
+              p !== filePath &&
+              cleanMediaTitle(path.basename(p)).title === seriesTitle
+          );
+          const intro = await detectVideoIntro(filePath, probe.duration, {
+            isSeries: true,
+            siblingEpisodeFilePaths: siblingPaths,
+          });
+
+          await prisma.episode.update({
+            where: { id: existingEp.id },
+            data: {
+              fileSignature: currentSig,
+              duration: probe.duration,
+              introStart: intro.introStart,
+              introEnd: intro.introEnd,
+              creditsStart: intro.creditsStart,
+            },
+          });
+        }
+        // If fileHasChanged === false: file is identical, skip all intro processing
+      } else {
+        // New episode detected: probe media and run smart intro detection
+        const probe = await probeMediaFile(filePath);
+        const siblingPaths = videoFiles.filter(
+          (p) =>
+            p !== filePath &&
+            cleanMediaTitle(path.basename(p)).title === seriesTitle
+        );
+        const intro = await detectVideoIntro(filePath, probe.duration, {
+          isSeries: true,
+          siblingEpisodeFilePaths: siblingPaths,
+        });
+
         const epCreated = await prisma.episode.create({
           data: {
             mediaItemId: series.id,
@@ -335,11 +378,11 @@ export async function scanLibraryFolder(folderId: string): Promise<{
             thumbnailUrl: series.backdropUrl || defaultBackdrop,
             videoUrl: "",
             filePath,
+            fileSignature: currentSig,
             duration: probe.duration,
-            introStart: probe.duration > 120 ? 5 : null,
-            introEnd: probe.duration > 120 ? 35 : null,
-            creditsStart:
-              probe.duration > 120 ? Math.max(probe.duration - 30, 60) : null,
+            introStart: intro.introStart,
+            introEnd: intro.introEnd,
+            creditsStart: intro.creditsStart,
           },
         });
 
@@ -357,7 +400,64 @@ export async function scanLibraryFolder(folderId: string): Promise<{
         where: { filePath },
       });
 
-      if (!existingMovie) {
+      if (existingMovie) {
+        // Caching: Only re-process if the video file has completely changed on disk
+        const fileHasChanged =
+          !existingMovie.fileSignature ||
+          existingMovie.fileSignature !== currentSig;
+
+        if (fileHasChanged) {
+          const probe = await probeMediaFile(filePath);
+          const intro = await detectVideoIntro(filePath, probe.duration, {
+            isSeries: false,
+          });
+
+          await prisma.mediaItem.update({
+            where: { id: existingMovie.id },
+            data: {
+              fileSignature: currentSig,
+              duration: probe.duration,
+              resolution: probe.resolution,
+              audioTracks: probe.audioTracks,
+              subtitleTracks: probe.subtitleTracks,
+              introStart: intro.introStart,
+              introEnd: intro.introEnd,
+              creditsStart: intro.creditsStart,
+            },
+          });
+        }
+
+        // Also check if metadata placeholder needs enrichment
+        if (
+          existingMovie.cast === "Local Media Collection" ||
+          existingMovie.posterUrl.includes("images.unsplash.com")
+        ) {
+          const imdb = await fetchImdbMetadata(parsed.title, parsed.year);
+          if (imdb) {
+            await prisma.mediaItem.update({
+              where: { id: existingMovie.id },
+              data: {
+                title: imdb.title,
+                overview: imdb.overview,
+                tagline: imdb.tagline || existingMovie.tagline,
+                releaseYear: imdb.year,
+                maturityRating: imdb.maturityRating,
+                genres: imdb.genres,
+                cast: imdb.cast,
+                director: imdb.director,
+                posterUrl: imdb.posterUrl,
+                backdropUrl: imdb.backdropUrl,
+                matchScore: imdb.matchScore,
+              },
+            });
+          }
+        }
+      } else {
+        // New movie detected: probe media and run smart intro detection
+        const probe = await probeMediaFile(filePath);
+        const intro = await detectVideoIntro(filePath, probe.duration, {
+          isSeries: false,
+        });
         const imdb = await fetchImdbMetadata(parsed.title, parsed.year);
 
         const created = await prisma.mediaItem.create({
@@ -376,11 +476,11 @@ export async function scanLibraryFolder(folderId: string): Promise<{
             posterUrl: imdb?.posterUrl || defaultPoster,
             backdropUrl: imdb?.backdropUrl || defaultBackdrop,
             filePath,
+            fileSignature: currentSig,
             duration: probe.duration,
-            introStart: probe.duration > 120 ? 10 : null,
-            introEnd: probe.duration > 120 ? 45 : null,
-            creditsStart:
-              probe.duration > 120 ? Math.max(probe.duration - 40, 60) : null,
+            introStart: intro.introStart,
+            introEnd: intro.introEnd,
+            creditsStart: intro.creditsStart,
             resolution: probe.resolution,
             audioTracks: probe.audioTracks,
             subtitleTracks: probe.subtitleTracks,
@@ -395,30 +495,6 @@ export async function scanLibraryFolder(folderId: string): Promise<{
           },
         });
         addedMovies++;
-      } else if (
-        existingMovie.cast === "Local Media Collection" ||
-        existingMovie.posterUrl.includes("images.unsplash.com")
-      ) {
-        // Automatically enrich existing scanned movies that still have placeholder metadata
-        const imdb = await fetchImdbMetadata(parsed.title, parsed.year);
-        if (imdb) {
-          await prisma.mediaItem.update({
-            where: { id: existingMovie.id },
-            data: {
-              title: imdb.title,
-              overview: imdb.overview,
-              tagline: imdb.tagline || existingMovie.tagline,
-              releaseYear: imdb.year,
-              maturityRating: imdb.maturityRating,
-              genres: imdb.genres,
-              cast: imdb.cast,
-              director: imdb.director,
-              posterUrl: imdb.posterUrl,
-              backdropUrl: imdb.backdropUrl,
-              matchScore: imdb.matchScore,
-            },
-          });
-        }
       }
     }
   }
