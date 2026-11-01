@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 const AVATAR_COLORS = [
-  "#E50914",
+  "#2563EB",
   "#0071EB",
   "#10B981",
   "#F59E0B",
@@ -133,7 +133,7 @@ export default function ProfileAccountModal({
       >
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-6">
           <div className="flex items-center gap-2.5">
-            <KeyRound className="w-5 h-5 text-[#E50914]" />
+            <KeyRound className="w-5 h-5 text-[#2563EB]" />
             <h2 className="text-xl font-bold">
               Profile Account & Password Settings
             </h2>
@@ -337,7 +337,7 @@ export default function ProfileAccountModal({
                     setConfirmPassword("");
                   }
                 }}
-                className="w-4 h-4 accent-[#E50914]"
+                className="w-4 h-4 accent-[#2563EB]"
               />
               <span className="text-xs text-zinc-300">
                 Disable password protection for this profile
@@ -357,7 +357,7 @@ export default function ProfileAccountModal({
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2 text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+            className="px-6 py-2 text-sm bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold rounded transition-colors"
           >
             {saving ? "Saving..." : "Save Changes"}
           </button>

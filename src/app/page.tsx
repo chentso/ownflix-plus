@@ -368,10 +368,10 @@ export default function OwnFlixApp() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#141414] flex flex-col items-center justify-center gap-4">
-        <span className="text-[#E50914] font-black text-4xl tracking-tighter animate-pulse">
+        <span className="text-[#2563EB] font-black text-4xl tracking-tighter animate-pulse">
           OWNFLIX+
         </span>
-        <div className="w-8 h-8 border-2 border-[#E50914] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -520,7 +520,7 @@ export default function OwnFlixApp() {
                 onClick={() =>
                   setAdminModal({ open: true, tab: "folders", editItem: null })
                 }
-                className="flex items-center gap-2 bg-[#E50914] hover:bg-[#f6121d] text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors self-start"
+                className="flex items-center gap-2 bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors self-start"
               >
                 <FolderSync className="w-4 h-4" />
                 <span>Add / Scan Local Folders</span>
@@ -797,7 +797,7 @@ export default function OwnFlixApp() {
               }}
             >
               {renderProfileIcon(pendingSwitchProfile.avatarIcon, "w-10 h-10")}
-              <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#E50914] border-2 border-[#181818] flex items-center justify-center">
+              <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#2563EB] border-2 border-[#181818] flex items-center justify-center">
                 <Lock className="w-3.5 h-3.5 text-white" />
               </span>
             </div>
@@ -849,7 +849,7 @@ export default function OwnFlixApp() {
               <button
                 type="submit"
                 disabled={verifyingSwitch}
-                className="px-7 py-2.5 text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+                className="px-7 py-2.5 text-sm bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold rounded transition-colors"
               >
                 {verifyingSwitch ? "Verifying..." : "Unlock Profile"}
               </button>

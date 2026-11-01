@@ -344,7 +344,7 @@ export default function AdminDashboardModal({
         {/* Modal Header */}
         <div className="px-6 py-4 bg-[#121212] border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="bg-[#E50914] text-white font-black text-sm px-2 py-0.5 rounded-sm">
+            <span className="bg-[#2563EB] text-white font-black text-sm px-2 py-0.5 rounded-sm">
               O+
             </span>
             <h2 className="text-lg md:text-xl font-bold">
@@ -370,7 +370,7 @@ export default function AdminDashboardModal({
             }}
             className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
               activeTab === "folders"
-                ? "border-[#E50914] text-white"
+                ? "border-[#2563EB] text-white"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -382,7 +382,7 @@ export default function AdminDashboardModal({
             onClick={() => setActiveTab("media")}
             className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
               activeTab === "media"
-                ? "border-[#E50914] text-white"
+                ? "border-[#2563EB] text-white"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -431,7 +431,7 @@ export default function AdminDashboardModal({
                 <button
                   onClick={() => handleScanFolder()}
                   disabled={scanningId !== null}
-                  className="shrink-0 flex items-center gap-2 bg-[#E50914] hover:bg-[#f6121d] disabled:opacity-50 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors"
+                  className="shrink-0 flex items-center gap-2 bg-[#2563EB] hover:bg-[#3B82F6] disabled:opacity-50 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors"
                 >
                   <RefreshCw
                     className={`w-4 h-4 ${
@@ -502,7 +502,7 @@ export default function AdminDashboardModal({
                 className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-5"
               >
                 <h4 className="text-sm font-bold flex items-center gap-2 mb-4">
-                  <FolderPlus className="w-4 h-4 text-[#E50914]" />
+                  <FolderPlus className="w-4 h-4 text-[#2563EB]" />
                   <span>Add Local Directory to Watch</span>
                 </h4>
 
@@ -805,7 +805,7 @@ export default function AdminDashboardModal({
                   type="checkbox"
                   checked={isFeatured}
                   onChange={(e) => setIsFeatured(e.target.checked)}
-                  className="w-4 h-4 accent-[#E50914]"
+                  className="w-4 h-4 accent-[#2563EB]"
                 />
                 <span className="text-sm text-zinc-200 font-medium">
                   Feature this title on the Home Hero Billboard
@@ -826,7 +826,7 @@ export default function AdminDashboardModal({
                 <button
                   type="submit"
                   disabled={savingMedia}
-                  className="px-6 py-2 text-xs sm:text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+                  className="px-6 py-2 text-xs sm:text-sm bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold rounded transition-colors"
                 >
                   {savingMedia ? "Saving..." : "Save Metadata"}
                 </button>

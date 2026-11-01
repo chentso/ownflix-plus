@@ -122,7 +122,7 @@ export default function MediaRow({
 
                   {/* Top-Left OwnFlix+ Badge */}
                   <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                    <span className="bg-[#E50914] text-white font-black text-[10px] px-1.5 py-0.5 rounded-sm shadow">
+                    <span className="bg-[#2563EB] text-white font-black text-[10px] px-1.5 py-0.5 rounded-sm shadow">
                       O+
                     </span>
                     {item.filePath && (
@@ -159,7 +159,7 @@ export default function MediaRow({
                   {progressPct > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-700">
                       <div
-                        className="h-full bg-[#E50914]"
+                        className="h-full bg-[#2563EB]"
                         style={{ width: `${progressPct}%` }}
                       />
                     </div>

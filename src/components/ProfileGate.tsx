@@ -30,7 +30,7 @@ interface ProfileGateProps {
 }
 
 const AVATAR_COLORS = [
-  "#E50914", // Netflix Red
+  "#2563EB", // Netflix Red
   "#0071EB", // Electric Blue
   "#10B981", // Emerald Green
   "#F59E0B", // Amber Gold
@@ -287,7 +287,7 @@ export default function ProfileGate({
       {/* Top Header */}
       <header className="px-8 md:px-14 py-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[#E50914] font-black text-3xl md:text-4xl tracking-tighter">
+          <span className="text-[#2563EB] font-black text-3xl md:text-4xl tracking-tighter">
             OWNFLIX+
           </span>
           <span className="text-[10px] uppercase tracking-widest bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-semibold">
@@ -400,7 +400,7 @@ export default function ProfileGate({
               onClick={() => setIsManaging((v) => !v)}
               className={`px-7 py-2.5 text-sm md:text-base tracking-widest uppercase font-medium transition-all ${
                 isManaging
-                  ? "bg-white text-black hover:bg-[#E50914] hover:text-white font-bold"
+                  ? "bg-white text-black hover:bg-[#2563EB] hover:text-white font-bold"
                   : "border border-zinc-500 text-zinc-400 hover:border-white hover:text-white"
               }`}
             >
@@ -427,7 +427,7 @@ export default function ProfileGate({
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2.5">
-                <LogIn className="w-5 h-5 text-[#E50914]" />
+                <LogIn className="w-5 h-5 text-[#2563EB]" />
                 <h2 className="text-xl font-bold">Sign In to Profile</h2>
               </div>
               <button
@@ -499,7 +499,7 @@ export default function ProfileGate({
               <button
                 type="submit"
                 disabled={verifyingSignIn}
-                className="px-6 py-2 text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+                className="px-6 py-2 text-sm bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold rounded transition-colors"
               >
                 {verifyingSignIn ? "Signing In..." : "Sign In"}
               </button>
@@ -536,7 +536,7 @@ export default function ProfileGate({
               }}
             >
               {renderProfileIcon(unlockingProfile.avatarIcon, "w-10 h-10")}
-              <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#E50914] border-2 border-[#181818] flex items-center justify-center">
+              <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-[#2563EB] border-2 border-[#181818] flex items-center justify-center">
                 <Lock className="w-3.5 h-3.5 text-white" />
               </span>
             </div>
@@ -588,7 +588,7 @@ export default function ProfileGate({
               <button
                 type="submit"
                 disabled={verifyingUnlock}
-                className="px-7 py-2.5 text-sm bg-[#E50914] hover:bg-[#f6121d] text-white font-bold rounded transition-colors"
+                className="px-7 py-2.5 text-sm bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold rounded transition-colors"
               >
                 {verifyingUnlock ? "Verifying..." : "Unlock Profile"}
               </button>
@@ -701,7 +701,7 @@ export default function ProfileGate({
             <div className="mb-5 bg-zinc-900/80 border border-zinc-800 rounded-lg p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-300">
-                  <KeyRound className="w-3.5 h-3.5 text-[#E50914]" />
+                  <KeyRound className="w-3.5 h-3.5 text-[#2563EB]" />
                   <span>Profile Password Lock</span>
                 </div>
                 {editingProfile?.hasPassword && (
@@ -770,7 +770,7 @@ export default function ProfileGate({
                       setRemovePassword(e.target.checked);
                       if (e.target.checked) setNewPassword("");
                     }}
-                    className="w-3.5 h-3.5 accent-[#E50914]"
+                    className="w-3.5 h-3.5 accent-[#2563EB]"
                   />
                   <span className="text-xs text-zinc-400">
                     Remove password lock from this profile
@@ -785,7 +785,7 @@ export default function ProfileGate({
                 type="checkbox"
                 checked={isKids}
                 onChange={(e) => setIsKids(e.target.checked)}
-                className="w-4 h-4 accent-[#E50914]"
+                className="w-4 h-4 accent-[#2563EB]"
               />
               <span className="text-sm text-zinc-300">
                 Kids Profile (prioritizes family-friendly ratings)
@@ -835,7 +835,7 @@ export default function ProfileGate({
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-6 py-2 text-sm bg-white text-black font-semibold hover:bg-[#E50914] hover:text-white transition-colors"
+                  className="px-6 py-2 text-sm bg-white text-black font-semibold hover:bg-[#2563EB] hover:text-white transition-colors"
                 >
                   {saving ? "Saving..." : "Save"}
                 </button>

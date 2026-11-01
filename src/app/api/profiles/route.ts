@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const profile = await prisma.profile.create({
     data: {
       name: name.trim(),
-      avatarColor: avatarColor || "#E50914",
+      avatarColor: avatarColor || "#2563EB",
       avatarIcon: avatarIcon || "smile",
       passwordHash: trimmedPass ? hashPassword(trimmedPass) : null,
       isKids: Boolean(isKids),

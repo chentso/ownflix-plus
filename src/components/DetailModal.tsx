@@ -115,7 +115,7 @@ export default function DetailModal({
           {/* Bottom Left Title & Buttons */}
           <div className="absolute bottom-6 left-6 right-6">
             <div className="flex items-center gap-2 mb-2">
-              <span className="bg-[#E50914] text-white font-black text-xs px-1.5 py-0.5 rounded-sm">
+              <span className="bg-[#2563EB] text-white font-black text-xs px-1.5 py-0.5 rounded-sm">
                 O+
               </span>
               <span className="text-xs font-bold tracking-[0.2em] text-zinc-300 uppercase">
@@ -218,7 +218,7 @@ export default function DetailModal({
               {/* Technical Stream Info Pill */}
               <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400 bg-zinc-900/90 border border-zinc-800 rounded-lg p-3">
                 <div className="flex items-center gap-1.5">
-                  <HardDrive className="w-4 h-4 text-[#E50914]" />
+                  <HardDrive className="w-4 h-4 text-[#2563EB]" />
                   <span>
                     Source:{" "}
                     <strong className="text-zinc-200">

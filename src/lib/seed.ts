@@ -24,7 +24,7 @@ async function runSeed(): Promise<void> {
   const alex = await prisma.profile.create({
     data: {
       name: "Alex",
-      avatarColor: "#E50914",
+      avatarColor: "#2563EB",
       avatarIcon: "crown",
       isAdmin: true,
       isKids: false,

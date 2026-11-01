@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
         participantId: participant.participantId,
         profileId: participant.profileId,
         profileName: participant.profileName,
-        avatarColor: participant.avatarColor || "#E50914",
+        avatarColor: participant.avatarColor || "#2563EB",
         avatarIcon: participant.avatarIcon || "smile",
         positionSeconds: Number(participant.positionSeconds) || 0,
         durationSeconds: Number(participant.durationSeconds) || 600,
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       profileId: participant.profileId || existing?.profileId || "guest",
       profileName: participant.profileName || existing?.profileName || "Guest",
       avatarColor:
-        participant.avatarColor || existing?.avatarColor || "#E50914",
+        participant.avatarColor || existing?.avatarColor || "#2563EB",
       avatarIcon: participant.avatarIcon || existing?.avatarIcon || "smile",
       positionSeconds:
         participant.positionSeconds !== undefined
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
         participantId: participant?.participantId || "guest",
         profileId: participant?.profileId || "guest",
         profileName: participant?.profileName || "Guest",
-        avatarColor: participant?.avatarColor || "#E50914",
+        avatarColor: participant?.avatarColor || "#2563EB",
         avatarIcon: participant?.avatarIcon || "smile",
         text: trimmed.slice(0, 1000),
         imageUrl: validImage,

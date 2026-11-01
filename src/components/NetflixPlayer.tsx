@@ -1810,7 +1810,7 @@ export default function NetflixPlayer({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border bg-black/60 border-zinc-600 text-zinc-100 hover:border-white transition-colors"
             title="Current Playback Speed"
           >
-            <Gauge className="w-3.5 h-3.5 text-[#E50914]" />
+            <Gauge className="w-3.5 h-3.5 text-[#2563EB]" />
             <span>Speed: {playbackSpeed}x</span>
           </button>
 
@@ -1842,7 +1842,7 @@ export default function NetflixPlayer({
             }
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
               effectiveQuality !== "original"
-                ? "bg-[#E50914] border-[#E50914] text-white"
+                ? "bg-[#2563EB] border-[#2563EB] text-white"
                 : "bg-black/60 border-zinc-600 text-zinc-200 hover:border-white"
             }`}
             title="Change Transcoding Quality for Slower Connections"
@@ -1857,7 +1857,7 @@ export default function NetflixPlayer({
               onClick={handleSkipIntro}
               className="hidden md:flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 text-xs text-zinc-200 px-3 py-1.5 rounded transition-colors"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[#E50914]" />
+              <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
               <span>Jump Intro</span>
             </button>
           )}
@@ -1946,7 +1946,7 @@ export default function NetflixPlayer({
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#E50914]" />
+              <Users className="w-5 h-5 text-[#2563EB]" />
               <h3 className="font-bold text-base text-white">
                 Watch Together Room
               </h3>
@@ -1971,7 +1971,7 @@ export default function NetflixPlayer({
                 <button
                   onClick={() => handleCreateRoom("PACE_SYNC")}
                   disabled={creatingRoom}
-                  className="w-full p-3 rounded-lg bg-[#E50914] hover:bg-[#f6121d] text-white text-left transition-colors"
+                  className="w-full p-3 rounded-lg bg-[#2563EB] hover:bg-[#3B82F6] text-white text-left transition-colors"
                 >
                   <div className="font-bold text-sm flex items-center gap-2">
                     <Flame className="w-4 h-4 fill-white" />
@@ -2049,12 +2049,12 @@ export default function NetflixPlayer({
                     onClick={() => handleSetRoomMode("ALL_PAUSE")}
                     className={`p-2.5 rounded-lg border text-left transition-colors ${
                       room.mode === "ALL_PAUSE"
-                        ? "bg-zinc-800 border-[#E50914] text-white"
+                        ? "bg-zinc-800 border-[#2563EB] text-white"
                         : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white"
                     }`}
                   >
                     <div className="text-xs font-bold flex items-center gap-1.5">
-                      <Pause className="w-3.5 h-3.5 text-[#E50914]" />
+                      <Pause className="w-3.5 h-3.5 text-[#2563EB]" />
                       <span>All-Pause Sync</span>
                     </div>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">
@@ -2066,7 +2066,7 @@ export default function NetflixPlayer({
                     onClick={() => handleSetRoomMode("PACE_SYNC")}
                     className={`p-2.5 rounded-lg border text-left transition-colors ${
                       room.mode === "PACE_SYNC"
-                        ? "bg-zinc-800 border-[#E50914] text-white"
+                        ? "bg-zinc-800 border-[#2563EB] text-white"
                         : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white"
                     }`}
                   >
@@ -2207,7 +2207,7 @@ export default function NetflixPlayer({
                     <p className="text-xs text-zinc-400 mt-0.5">{opt.desc}</p>
                   </div>
                   {selected && (
-                    <Check className="w-4 h-4 text-[#E50914] shrink-0 mt-1" />
+                    <Check className="w-4 h-4 text-[#2563EB] shrink-0 mt-1" />
                   )}
                 </button>
               );
@@ -2341,7 +2341,7 @@ export default function NetflixPlayer({
                     </div>
                   </div>
                   {active && (
-                    <span className="text-[10px] font-bold bg-[#E50914] text-white px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] font-bold bg-[#2563EB] text-white px-1.5 py-0.5 rounded">
                       NOW
                     </span>
                   )}
@@ -2407,7 +2407,7 @@ export default function NetflixPlayer({
                 style={{ width: `${bufferedPercent}%` }}
               />
               <div
-                className="absolute inset-y-0 left-0 bg-[#E50914] rounded-full"
+                className="absolute inset-y-0 left-0 bg-[#2563EB] rounded-full"
                 style={{ width: `${progressPercent}%` }}
               />
 
@@ -2446,7 +2446,7 @@ export default function NetflixPlayer({
                   })}
 
               <div
-                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#E50914] shadow-lg transition-transform ${
+                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#2563EB] shadow-lg transition-transform ${
                   isScrubbing
                     ? "scale-125"
                     : "scale-0 group-hover/scrub:scale-100"
@@ -2525,7 +2525,7 @@ export default function NetflixPlayer({
                     videoRef.current.muted = val === 0;
                   }
                 }}
-                className="hidden sm:block w-20 accent-[#E50914] cursor-pointer"
+                className="hidden sm:block w-20 accent-[#2563EB] cursor-pointer"
               />
             </div>
 
@@ -2563,7 +2563,7 @@ export default function NetflixPlayer({
                 }
                 className={`hover:text-white transition-colors ${
                   activePopover === "episodes"
-                    ? "text-[#E50914]"
+                    ? "text-[#2563EB]"
                     : "text-white"
                 }`}
                 title="Episodes"
@@ -2593,7 +2593,7 @@ export default function NetflixPlayer({
                 )
               }
               className={`hover:text-white transition-colors ${
-                activePopover === "audioSub" ? "text-[#E50914]" : "text-white"
+                activePopover === "audioSub" ? "text-[#2563EB]" : "text-white"
               }`}
               title="Audio & Subtitles"
             >
@@ -2607,7 +2607,7 @@ export default function NetflixPlayer({
                 )
               }
               className={`hover:text-white transition-colors flex items-center gap-1 ${
-                activePopover === "quality" ? "text-[#E50914]" : "text-white"
+                activePopover === "quality" ? "text-[#2563EB]" : "text-white"
               }`}
               title="Video Quality & Data Saver"
             >
@@ -2622,7 +2622,7 @@ export default function NetflixPlayer({
                 setActivePopover((p) => (p === "speed" ? "none" : "speed"))
               }
               className={`hover:text-white transition-colors flex items-center gap-1.5 ${
-                activePopover === "speed" ? "text-[#E50914]" : "text-white"
+                activePopover === "speed" ? "text-[#2563EB]" : "text-white"
               }`}
               title="Playback Speed"
             >
@@ -2656,7 +2656,7 @@ export default function NetflixPlayer({
         {/* Sidebar Header */}
         <div className="px-4 py-4 border-b border-zinc-800 bg-[#161616] flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
-            <MessageSquare className="w-5 h-5 text-[#E50914] shrink-0" />
+            <MessageSquare className="w-5 h-5 text-[#2563EB] shrink-0" />
             <span className="font-bold text-base text-white truncate">
               {room ? `Room #${room.id.toUpperCase()} Chat` : "Live Stream Chat"}
             </span>
@@ -2684,7 +2684,7 @@ export default function NetflixPlayer({
             <button
               onClick={() => handleCreateRoom("PACE_SYNC")}
               disabled={creatingRoom}
-              className="flex items-center gap-1.5 bg-[#E50914] hover:bg-[#f6121d] text-white text-sm font-bold px-3 py-1.5 rounded transition-colors shrink-0"
+              className="flex items-center gap-1.5 bg-[#2563EB] hover:bg-[#3B82F6] text-white text-sm font-bold px-3 py-1.5 rounded transition-colors shrink-0"
             >
               <Users className="w-4 h-4" />
               <span>Start Room</span>
@@ -2710,7 +2710,7 @@ export default function NetflixPlayer({
                     room.mode === "PACE_SYNC" ? "ALL_PAUSE" : "PACE_SYNC"
                   )
                 }
-                className="text-[#E50914] hover:underline font-semibold"
+                className="text-[#2563EB] hover:underline font-semibold"
               >
                 Switch Mode
               </button>
@@ -2915,7 +2915,7 @@ export default function NetflixPlayer({
                         <button
                           type="button"
                           onClick={() => seekTo(msg.videoTimestamp)}
-                          className="text-xs font-mono text-zinc-400 hover:text-[#E50914] transition-colors"
+                          className="text-xs font-mono text-zinc-400 hover:text-[#2563EB] transition-colors"
                           title="Jump to this video timestamp"
                         >
                           {formatTime(msg.videoTimestamp)}
@@ -2974,7 +2974,7 @@ export default function NetflixPlayer({
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
                             autoFocus
-                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-[#E50914] rounded px-3 py-2 text-base text-white outline-none"
+                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-[#2563EB] rounded px-3 py-2 text-base text-white outline-none"
                           />
                           <div className="flex items-center justify-end gap-2">
                             <button
@@ -2989,7 +2989,7 @@ export default function NetflixPlayer({
                             </button>
                             <button
                               type="submit"
-                              className="px-3 py-1 text-xs bg-[#E50914] hover:bg-[#f6121d] text-white font-semibold rounded"
+                              className="px-3 py-1 text-xs bg-[#2563EB] hover:bg-[#3B82F6] text-white font-semibold rounded"
                             >
                               Save
                             </button>
@@ -3096,7 +3096,7 @@ export default function NetflixPlayer({
                 value={emojiSearch}
                 onChange={(e) => setEmojiSearch(e.target.value)}
                 placeholder="Search emojis (e.g. laugh, fire, popcorn, heart)..."
-                className="w-full bg-zinc-900 border border-zinc-700/80 focus:border-[#E50914] rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none mb-2"
+                className="w-full bg-zinc-900 border border-zinc-700/80 focus:border-[#2563EB] rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none mb-2"
               />
 
               {/* Category Tabs */}
@@ -3110,7 +3110,7 @@ export default function NetflixPlayer({
                       title={cat.label}
                       className={`flex-1 py-1.5 rounded text-xl transition-colors ${
                         activeEmojiCategory === cat.id
-                          ? "bg-zinc-800 border-b-2 border-[#E50914]"
+                          ? "bg-zinc-800 border-b-2 border-[#2563EB]"
                           : "hover:bg-zinc-800/50 opacity-70 hover:opacity-100"
                       }`}
                     >
@@ -3213,7 +3213,7 @@ export default function NetflixPlayer({
 
           <form
             onSubmit={handleSendChat}
-            className="bg-zinc-900 border border-zinc-700/80 focus-within:border-[#E50914] rounded-xl px-3.5 py-2.5 transition-colors"
+            className="bg-zinc-900 border border-zinc-700/80 focus-within:border-[#2563EB] rounded-xl px-3.5 py-2.5 transition-colors"
           >
             <input
               type="text"
@@ -3248,7 +3248,7 @@ export default function NetflixPlayer({
                   onClick={() => setShowEmojiPicker((v) => !v)}
                   className={`p-1.5 rounded hover:bg-zinc-800 transition-colors ${
                     showEmojiPicker
-                      ? "text-[#E50914] bg-zinc-800"
+                      ? "text-[#2563EB] bg-zinc-800"
                       : "text-zinc-400 hover:text-white"
                   }`}
                   title="Insert emoji"
@@ -3269,7 +3269,7 @@ export default function NetflixPlayer({
               <button
                 type="submit"
                 disabled={!chatText.trim() && !chatImagePreview}
-                className="px-3.5 py-1.5 rounded-md bg-[#E50914] hover:bg-[#f6121d] disabled:opacity-40 text-white text-sm font-bold flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#3B82F6] disabled:opacity-40 text-white text-sm font-bold flex items-center gap-1.5 transition-colors"
                 title="Send Message"
               >
                 <span>Send</span>

@@ -41,7 +41,7 @@ export default function HeroBillboard({
       <div className="relative z-10 h-full flex flex-col justify-center px-4 md:px-12 pb-16 max-w-3xl">
         {/* OwnFlix+ Originals / Local Disk Badge */}
         <div className="flex items-center gap-2.5 mb-3">
-          <span className="bg-[#E50914] text-white font-black text-xs px-1.5 py-0.5 rounded-sm tracking-tighter">
+          <span className="bg-[#2563EB] text-white font-black text-xs px-1.5 py-0.5 rounded-sm tracking-tighter">
             O+
           </span>
           <span className="text-xs md:text-sm font-bold tracking-[0.25em] text-zinc-300 uppercase">

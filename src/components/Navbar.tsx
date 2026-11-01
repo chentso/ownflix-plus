@@ -85,7 +85,7 @@ export default function Navbar({
             onSelectCategory("HOME");
             onSearchChange("");
           }}
-          className="text-[#E50914] font-black text-2xl md:text-3xl tracking-tighter focus:outline-none hover:opacity-90 transition-opacity"
+          className="text-[#2563EB] font-black text-2xl md:text-3xl tracking-tighter focus:outline-none hover:opacity-90 transition-opacity"
         >
           OWNFLIX+
         </button>
@@ -166,7 +166,7 @@ export default function Navbar({
           className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-1.5 rounded transition-colors"
           title="Manage Local Folders & Media Metadata"
         >
-          <HardDrive className="w-3.5 h-3.5 text-[#E50914]" />
+          <HardDrive className="w-3.5 h-3.5 text-[#2563EB]" />
           <span>Library Manager</span>
         </button>
 
@@ -246,7 +246,7 @@ export default function Navbar({
                   }}
                   className="w-full px-3 py-2 flex items-center gap-3 text-zinc-200 hover:text-white hover:bg-zinc-800/70 transition-colors font-medium"
                 >
-                  <KeyRound className="w-4 h-4 text-[#E50914]" />
+                  <KeyRound className="w-4 h-4 text-[#2563EB]" />
                   <span>Profile Password & Account</span>
                 </button>
 
