@@ -8,7 +8,6 @@ import {
   X,
   HardDrive,
   ChevronDown,
-  Users,
   FolderSync,
   LogOut,
   PlusCircle,
@@ -302,17 +301,6 @@ export default function Navbar({
                     </button>
                   </>
                 )}
-
-                <button
-                  onClick={() => {
-                    setDropdownOpen(false);
-                    onManageProfiles();
-                  }}
-                  className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
-                  <Users className="w-4 h-4 text-zinc-400" />
-                  <span>Who&apos;s Watching?</span>
-                </button>
 
                 <div className="border-t border-zinc-800 my-1.5" />
 
