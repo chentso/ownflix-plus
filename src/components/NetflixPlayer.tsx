@@ -2834,16 +2834,16 @@ export default function NetflixPlayer({
                       {/* Microsoft Teams Floating Hover Reaction & Action Toolbar */}
                       {!isEditing && (
                         <div
-                          className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-4 ${
+                          className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-5 ${
                             isOwn ? "right-2" : "left-2"
-                          } z-20 flex items-center gap-1 bg-[#1a1a1d] border border-zinc-700 rounded-full px-2 py-1 shadow-xl`}
+                          } z-20 flex items-center gap-1 bg-[#1a1a1d] border border-zinc-700 rounded-full px-2.5 py-1 shadow-xl`}
                         >
                           {QUICK_REACTIONS.map((emo) => (
                             <button
                               key={emo}
                               type="button"
                               onClick={() => handleToggleReaction(msg.id, emo)}
-                              className="hover:scale-125 transition-transform px-1 py-0.5 text-sm leading-none"
+                              className="hover:scale-125 transition-transform px-1 py-0.5 text-lg leading-none"
                               title={`React ${emo}`}
                             >
                               {emo}
@@ -2859,7 +2859,7 @@ export default function NetflixPlayer({
                             className="p-1 text-zinc-400 hover:text-white rounded"
                             title="More reactions"
                           >
-                            <Smile className="w-3.5 h-3.5" />
+                            <Smile className="w-4 h-4" />
                           </button>
                           {isOwn && (
                             <>
@@ -2873,7 +2873,7 @@ export default function NetflixPlayer({
                                 className="p-1 text-zinc-400 hover:text-white rounded"
                                 title="Edit message"
                               >
-                                <Pencil className="w-3.5 h-3.5" />
+                                <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                 type="button"
@@ -2881,7 +2881,7 @@ export default function NetflixPlayer({
                                 className="p-1 text-zinc-400 hover:text-red-400 rounded"
                                 title="Delete message"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </>
                           )}
@@ -2894,7 +2894,7 @@ export default function NetflixPlayer({
                           isOwn ? "justify-end" : "justify-start"
                         }`}
                       >
-                        <span className="font-bold text-xs text-zinc-300 truncate">
+                        <span className="font-bold text-sm text-zinc-300 truncate">
                           {isOwn ? "You" : msg.profileName}
                         </span>
                         <button
@@ -2914,18 +2914,18 @@ export default function NetflixPlayer({
 
                       {/* Expanded Reaction Emoji Picker for this Message */}
                       {reactionPickerMsgId === msg.id && (
-                        <div className="mt-2 mb-2 bg-[#161618] border border-zinc-700 rounded-xl p-2.5 shadow-2xl z-30 w-64">
-                          <div className="flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                        <div className="mt-2 mb-2 bg-[#161618] border border-zinc-700 rounded-xl p-3 shadow-2xl z-30 w-72">
+                          <div className="flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                             <span>React with any emoji</span>
                             <button
                               type="button"
                               onClick={() => setReactionPickerMsgId(null)}
                               className="text-zinc-400 hover:text-white"
                             >
-                              <X className="w-3.5 h-3.5" />
+                              <X className="w-4 h-4" />
                             </button>
                           </div>
-                          <div className="grid grid-cols-7 gap-1 max-h-36 overflow-y-auto pr-1">
+                          <div className="grid grid-cols-6 gap-1.5 max-h-44 overflow-y-auto pr-1">
                             {EMOJI_CATEGORIES.flatMap((c) => c.emojis).map(
                               (item) => (
                                 <button
@@ -2935,7 +2935,7 @@ export default function NetflixPlayer({
                                     handleToggleReaction(msg.id, item.char);
                                     setReactionPickerMsgId(null);
                                   }}
-                                  className="h-7 rounded hover:bg-zinc-800 flex items-center justify-center text-base transition-transform hover:scale-110"
+                                  className="h-9 rounded-lg hover:bg-zinc-800 flex items-center justify-center text-2xl transition-transform hover:scale-125"
                                 >
                                   {item.char}
                                 </button>
@@ -2952,14 +2952,14 @@ export default function NetflixPlayer({
                             e.preventDefault();
                             handleSaveEditMessage(msg.id);
                           }}
-                          className="mt-1.5 space-y-2 min-w-[220px]"
+                          className="mt-1.5 space-y-2 min-w-[240px]"
                         >
                           <input
                             type="text"
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
                             autoFocus
-                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-[#E50914] rounded px-3 py-2 text-sm text-white outline-none"
+                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-[#E50914] rounded px-3 py-2 text-base text-white outline-none"
                           />
                           <div className="flex items-center justify-end gap-2">
                             <button
@@ -2982,11 +2982,24 @@ export default function NetflixPlayer({
                         </form>
                       ) : (
                         <>
-                          {msg.text && (
-                            <p className="text-[15px] text-zinc-100 break-words leading-snug whitespace-pre-wrap">
-                              {msg.text}
-                            </p>
-                          )}
+                          {msg.text &&
+                            (() => {
+                              const trimmedMsg = msg.text.trim();
+                              const isEmojiOnly =
+                                trimmedMsg.length <= 14 &&
+                                !/[a-zA-Z0-9]/.test(trimmedMsg);
+                              return (
+                                <p
+                                  className={`${
+                                    isEmojiOnly
+                                      ? "text-4xl leading-tight py-1"
+                                      : "text-[17px] leading-relaxed"
+                                  } text-zinc-100 break-words whitespace-pre-wrap`}
+                                >
+                                  {msg.text}
+                                </p>
+                              );
+                            })()}
 
                           {/* Attached Picture */}
                           {msg.imageUrl && (
@@ -3027,14 +3040,14 @@ export default function NetflixPlayer({
                             type="button"
                             onClick={() => handleToggleReaction(msg.id, emo)}
                             title={`Reacted by: ${names}`}
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border transition-colors ${
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm border transition-colors ${
                               hasMine
                                 ? "bg-indigo-500/25 border-indigo-400 text-white font-semibold"
                                 : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-600"
                             }`}
                           >
-                            <span>{emo}</span>
-                            <span>{users.length}</span>
+                            <span className="text-base leading-none">{emo}</span>
+                            <span className="text-xs">{users.length}</span>
                           </button>
                         );
                       })}
@@ -3050,7 +3063,7 @@ export default function NetflixPlayer({
         <div className="relative border-t border-zinc-800 bg-[#161616] p-3">
           {/* Emoji Picker Popover (Full Categorized + Searchable Teams Style) */}
           {showEmojiPicker && (
-            <div className="absolute bottom-full left-3 right-3 mb-2 bg-[#1e1e1e] border border-zinc-700 rounded-xl p-3 shadow-2xl z-40 flex flex-col max-h-80">
+            <div className="absolute bottom-full left-3 right-3 mb-2 bg-[#1e1e1e] border border-zinc-700 rounded-xl p-3.5 shadow-2xl z-40 flex flex-col max-h-96">
               <div className="flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 <span>Emoji Picker</span>
                 <button
@@ -3073,14 +3086,14 @@ export default function NetflixPlayer({
 
               {/* Category Tabs */}
               {!emojiSearch.trim() && (
-                <div className="flex items-center gap-1 border-b border-zinc-800 pb-1.5 mb-2">
+                <div className="flex items-center gap-1 border-b border-zinc-800 pb-2 mb-2">
                   {EMOJI_CATEGORIES.map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => setActiveEmojiCategory(cat.id)}
                       title={cat.label}
-                      className={`flex-1 py-1 rounded text-base transition-colors ${
+                      className={`flex-1 py-1.5 rounded text-xl transition-colors ${
                         activeEmojiCategory === cat.id
                           ? "bg-zinc-800 border-b-2 border-[#E50914]"
                           : "hover:bg-zinc-800/50 opacity-70 hover:opacity-100"
@@ -3095,7 +3108,7 @@ export default function NetflixPlayer({
               {/* Scrollable Emoji Grid */}
               <div className="overflow-y-auto flex-1 pr-1">
                 {emojiSearch.trim() ? (
-                  <div className="grid grid-cols-8 gap-1">
+                  <div className="grid grid-cols-6 gap-1.5">
                     {EMOJI_CATEGORIES.flatMap((c) => c.emojis)
                       .filter((e) =>
                         e.keywords
@@ -3110,7 +3123,7 @@ export default function NetflixPlayer({
                             setChatText((prev) => prev + item.char)
                           }
                           title={item.keywords}
-                          className="h-8 rounded hover:bg-zinc-800 flex items-center justify-center text-lg transition-transform hover:scale-110"
+                          className="h-11 rounded-lg hover:bg-zinc-800 flex items-center justify-center text-2xl transition-transform hover:scale-125"
                         >
                           {item.char}
                         </button>
@@ -3124,10 +3137,10 @@ export default function NetflixPlayer({
                       ) || EMOJI_CATEGORIES[0];
                     return (
                       <div>
-                        <div className="text-xs font-semibold text-zinc-400 mb-1.5">
+                        <div className="text-xs font-semibold text-zinc-400 mb-2">
                           {currentCat.label} ({currentCat.emojis.length})
                         </div>
-                        <div className="grid grid-cols-8 gap-1">
+                        <div className="grid grid-cols-6 gap-1.5">
                           {currentCat.emojis.map((item, idx) => (
                             <button
                               key={`${currentCat.id}-${item.char}-${idx}`}
@@ -3136,7 +3149,7 @@ export default function NetflixPlayer({
                                 setChatText((prev) => prev + item.char)
                               }
                               title={item.keywords}
-                              className="h-8 rounded hover:bg-zinc-800 flex items-center justify-center text-lg transition-transform hover:scale-110"
+                              className="h-11 rounded-lg hover:bg-zinc-800 flex items-center justify-center text-2xl transition-transform hover:scale-125"
                             >
                               {item.char}
                             </button>
@@ -3210,11 +3223,11 @@ export default function NetflixPlayer({
                   ? "Type a message or paste a picture..."
                   : "Type a message..."
               }
-              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none mb-2"
+              className="w-full bg-transparent text-base text-white placeholder-zinc-500 outline-none mb-2"
             />
 
             <div className="flex items-center justify-between pt-1.5 border-t border-zinc-800/80">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setShowEmojiPicker((v) => !v)}
@@ -3225,7 +3238,7 @@ export default function NetflixPlayer({
                   }`}
                   title="Insert emoji"
                 >
-                  <Smile className="w-4 h-4" />
+                  <Smile className="w-5 h-5" />
                 </button>
 
                 <button
@@ -3234,7 +3247,7 @@ export default function NetflixPlayer({
                   className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
                   title="Attach picture"
                 >
-                  <ImageIcon className="w-4 h-4" />
+                  <ImageIcon className="w-5 h-5" />
                 </button>
               </div>
 
