@@ -2648,7 +2648,8 @@ export default function NetflixPlayer({
       </div>
       </div>
 
-      {/* Permanent Docked Right Chat Sidebar */}
+      {/* Docked Right Chat Sidebar — Only visible in Watch Together Mode */}
+      {room && (
       <aside
         onClick={(e) => e.stopPropagation()}
         className="w-88 md:w-96 lg:w-[420px] h-full bg-[#121212] border-l border-zinc-800 flex flex-col shrink-0 z-30 select-text"
@@ -3279,6 +3280,7 @@ export default function NetflixPlayer({
           </form>
         </div>
       </aside>
+      )}
 
       {/* Fullscreen Lightbox for Clicked Chat Pictures */}
       {lightboxImage && (
