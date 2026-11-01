@@ -8,26 +8,42 @@ datasource db {
 }
 
 model Profile {
-  id            String          @id @default(cuid())
-  name          String
-  avatarColor   String          @default("#E50914")
-  avatarIcon    String          @default("smile")
-  passwordHash  String?
-  isKids        Boolean         @default(false)
-  isAdmin       Boolean         @default(false)
-  createdAt     DateTime        @default(now())
-  watchProgress WatchProgress[]
-  myList        MyListItem[]
+  id             String          @id @default(cuid())
+  name           String
+  avatarColor    String          @default("#2563EB")
+  avatarIcon     String          @default("smile")
+  passwordHash   String?
+  isKids         Boolean         @default(false)
+  isAdmin        Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  watchProgress  WatchProgress[]
+  myList         MyListItem[]
+  libraryFolders LibraryFolder[]
+  activityLogs   ActivityLog[]
 }
 
 model LibraryFolder {
   id            String    @id @default(cuid())
   name          String
-  path          String    @unique
+  path          String
   mediaType     String    @default("MIXED") // MOVIE, SERIES, MIXED
+  profileId     String?
+  profile       Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
   lastScannedAt DateTime?
   itemCount     Int       @default(0)
   createdAt     DateTime  @default(now())
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  action      String   // PLAY_START, PLAY_PROGRESS, PLAY_COMPLETE, PROFILE_LOGIN, MYLIST_ADD, MYLIST_REMOVE, ROOM_CREATE, ROOM_JOIN
+  details     String
+  mediaItemId String?
+  mediaTitle  String?
+  ipAddress   String?  @default("127.0.0.1")
+  createdAt   DateTime @default(now())
 }
 
 model MediaItem {

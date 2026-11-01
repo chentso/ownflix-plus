@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { MediaItem, LibraryFolder } from "@/types/ownflix";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { MediaItem, LibraryFolder, ActivityLogItem } from "@/types/ownflix";
+import { renderProfileIcon } from "@/components/ProfileGate";
 import {
   X,
   HardDrive,
@@ -14,37 +15,148 @@ import {
   Star,
   Pencil,
   Sparkles,
+  Activity,
+  ShieldAlert,
+  ShieldCheck,
+  Users,
+  Clock,
+  Play,
+  Bookmark,
+  LogIn,
+  Check,
+  FolderOpen,
 } from "lucide-react";
 
+export type AdminTab = "activity" | "folders" | "media";
+
+interface AdminProfileSummary {
+  id: string;
+  name: string;
+  avatarColor: string;
+  avatarIcon: string;
+  hasPassword: boolean;
+  isKids: boolean;
+  isAdmin: boolean;
+  createdAt: string;
+  libraryFolders: LibraryFolder[];
+  watchProgress: {
+    id: string;
+    mediaItemId: string;
+    positionSeconds: number;
+    durationSeconds: number;
+    completed: boolean;
+    updatedAt: string;
+    mediaItem: {
+      id: string;
+      title: string;
+      posterUrl: string;
+      backdropUrl: string;
+      type: string;
+      releaseYear: number;
+    };
+    episode?: {
+      id: string;
+      seasonNumber: number;
+      episodeNumber: number;
+      title: string;
+    } | null;
+  }[];
+  counts: {
+    activityLogs: number;
+    watchProgress: number;
+    myList: number;
+    libraryFolders: number;
+  };
+}
+
 interface AdminDashboardModalProps {
-  initialTab?: "folders" | "media";
+  initialTab?: AdminTab;
   initialEditItem?: MediaItem | null;
   media: MediaItem[];
   onClose: () => void;
   onLibraryUpdated: () => Promise<void>;
+  standalone?: boolean;
+}
+
+function isBrowserLocalhost(): boolean {
+  if (typeof window === "undefined") return true;
+  const h = window.location.hostname.toLowerCase();
+  return (
+    h === "localhost" ||
+    h === "127.0.0.1" ||
+    h === "::1" ||
+    h === "[::1]"
+  );
+}
+
+function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 60) return "Just now";
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function AdminDashboardModal({
-  initialTab = "folders",
+  initialTab = "activity",
   initialEditItem = null,
   media,
   onClose,
   onLibraryUpdated,
+  standalone = false,
 }: AdminDashboardModalProps) {
-  const [activeTab, setActiveTab] = useState<"folders" | "media">(
+  const [activeTab, setActiveTab] = useState<AdminTab>(
     initialEditItem ? "media" : initialTab
   );
+
+  // Localhost verification state
+  const [isLocalhost, setIsLocalhost] = useState<boolean>(() =>
+    isBrowserLocalhost()
+  );
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [loadingAdmin, setLoadingAdmin] = useState(true);
+
+  // Primary Dashboard Data
+  const [adminProfiles, setAdminProfiles] = useState<AdminProfileSummary[]>([]);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
+
+  // Activity Log Filters
+  const [selectedProfileFilter, setSelectedProfileFilter] =
+    useState<string>("ALL");
+  const [selectedActionFilter, setSelectedActionFilter] =
+    useState<string>("ALL");
+
+  // Storage Location Filter & Add/Edit State
+  const [storageProfileFilter, setStorageProfileFilter] =
+    useState<string>("ALL");
   const [scanningId, setScanningId] = useState<string | null>(null);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [syncingImdbId, setSyncingImdbId] = useState<string | null>(null);
 
-  // Add Folder Form
+  // Add Storage Location Form
   const [folderName, setFolderName] = useState("");
   const [folderPath, setFolderPath] = useState("");
   const [folderType, setFolderType] = useState<"MOVIE" | "SERIES" | "MIXED">(
     "MIXED"
   );
+  const [folderProfileId, setFolderProfileId] = useState<string>("ALL");
+
+  // Inline Edit Storage Location State
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editFolderName, setEditFolderName] = useState("");
+  const [editFolderPath, setEditFolderPath] = useState("");
+  const [editFolderType, setEditFolderType] = useState<
+    "MOVIE" | "SERIES" | "MIXED"
+  >("MIXED");
+  const [editFolderProfileId, setEditFolderProfileId] = useState<string>("ALL");
+  const [savingFolderEdit, setSavingFolderEdit] = useState(false);
 
   // Media Edit / Create Form
   const [editingItem, setEditingItem] = useState<MediaItem | null>(
@@ -72,17 +184,42 @@ export default function AdminDashboardModal({
   const [isFeatured, setIsFeatured] = useState(false);
   const [savingMedia, setSavingMedia] = useState(false);
 
-  const fetchFolders = async () => {
-    const res = await fetch("/api/library");
-    if (res.ok) {
-      const data = await res.json();
-      setFolders(data.folders || []);
+  const fetchAdminData = useCallback(async () => {
+    if (!isBrowserLocalhost()) {
+      setIsLocalhost(false);
+      setAccessError(
+        "Admin Settings Dashboard can only be accessed from localhost (127.0.0.1 / ::1)."
+      );
+      setLoadingAdmin(false);
+      return;
     }
-  };
+
+    setLoadingAdmin(true);
+    try {
+      const res = await fetch("/api/admin");
+      const data = await res.json();
+      if (res.status === 403 || data.isLocalhost === false) {
+        setIsLocalhost(false);
+        setAccessError(
+          data.error ||
+            "Admin Settings Dashboard can only be accessed from localhost."
+        );
+        return;
+      }
+      if (res.ok) {
+        setIsLocalhost(true);
+        setAdminProfiles(data.profiles || []);
+        setFolders(data.folders || []);
+        setActivityLogs(data.activityLogs || []);
+      }
+    } finally {
+      setLoadingAdmin(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchFolders();
-  }, []);
+    fetchAdminData();
+  }, [fetchAdminData]);
 
   useEffect(() => {
     if (editingItem) {
@@ -115,6 +252,166 @@ export default function AdminDashboardModal({
     }
   }, [editingItem]);
 
+  // Filtered Activity Logs
+  const filteredActivityLogs = useMemo(() => {
+    return activityLogs.filter((log) => {
+      if (
+        selectedProfileFilter !== "ALL" &&
+        log.profileId !== selectedProfileFilter
+      ) {
+        return false;
+      }
+      if (selectedActionFilter !== "ALL") {
+        if (selectedActionFilter === "PLAYBACK") {
+          return (
+            log.action === "PLAY_START" ||
+            log.action === "PLAY_PROGRESS" ||
+            log.action === "PLAY_COMPLETE"
+          );
+        }
+        if (selectedActionFilter === "MYLIST") {
+          return (
+            log.action === "MYLIST_ADD" || log.action === "MYLIST_REMOVE"
+          );
+        }
+        return log.action === selectedActionFilter;
+      }
+      return true;
+    });
+  }, [activityLogs, selectedProfileFilter, selectedActionFilter]);
+
+  // Filtered Storage Folders
+  const filteredFolders = useMemo(() => {
+    if (storageProfileFilter === "ALL") return folders;
+    if (storageProfileFilter === "SHARED") {
+      return folders.filter((f) => !f.profileId);
+    }
+    return folders.filter((f) => f.profileId === storageProfileFilter);
+  }, [folders, storageProfileFilter]);
+
+  const handleClearActivityLogs = async () => {
+    await fetch(
+      `/api/admin?profileId=${encodeURIComponent(selectedProfileFilter)}`,
+      { method: "DELETE" }
+    );
+    setStatusBanner(
+      selectedProfileFilter === "ALL"
+        ? "Cleared activity logs for all user profiles."
+        : "Cleared activity logs for selected profile."
+    );
+    await fetchAdminData();
+  };
+
+  const startEditFolder = (folder: LibraryFolder) => {
+    setEditingFolderId(folder.id);
+    setEditFolderName(folder.name);
+    setEditFolderPath(folder.path);
+    setEditFolderType(folder.mediaType);
+    setEditFolderProfileId(folder.profileId || "ALL");
+  };
+
+  const handleSaveFolderEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFolderId || !editFolderName.trim() || !editFolderPath.trim()) {
+      return;
+    }
+    setSavingFolderEdit(true);
+    setStatusBanner(null);
+    try {
+      const res = await fetch("/api/library", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingFolderId,
+          name: editFolderName.trim(),
+          path: editFolderPath.trim(),
+          mediaType: editFolderType,
+          profileId: editFolderProfileId === "ALL" ? null : editFolderProfileId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatusBanner(data.error || "Failed to update storage location");
+      } else {
+        setEditingFolderId(null);
+        setStatusBanner(
+          `Updated storage location "${data.folder.name}" (${
+            data.folder.profile ? `Assigned to ${data.folder.profile.name}` : "Shared with All Profiles"
+          }).`
+        );
+        await fetchAdminData();
+        await onLibraryUpdated();
+      }
+    } finally {
+      setSavingFolderEdit(false);
+    }
+  };
+
+  const handleAddFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!folderName.trim() || !folderPath.trim()) return;
+    setScanningId("adding");
+    setStatusBanner(null);
+    try {
+      const res = await fetch("/api/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: folderName,
+          path: folderPath,
+          mediaType: folderType,
+          profileId: folderProfileId === "ALL" ? null : folderProfileId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatusBanner(data.error || "Failed to add storage location");
+      } else {
+        setFolderName("");
+        setFolderPath("");
+        setStatusBanner(
+          `Added storage location "${data.folder.name}" (${
+            data.folder.profile
+              ? `Profile: ${data.folder.profile.name}`
+              : "Shared: All Profiles"
+          }) — indexed ${data.scanResult.scannedFiles} video files.`
+        );
+        await fetchAdminData();
+        await onLibraryUpdated();
+      }
+    } finally {
+      setScanningId(null);
+    }
+  };
+
+  const handleScanFolder = async (folderId?: string) => {
+    setScanningId(folderId || "all");
+    setStatusBanner(null);
+    try {
+      const res = await fetch("/api/library", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatusBanner(
+          `Storage scan & IMDb auto-match complete: ${data.scanResult.scannedFiles} files indexed (${data.scanResult.addedMovies} movies added, ${data.scanResult.addedEpisodes} episodes added).`
+        );
+        await fetchAdminData();
+        await onLibraryUpdated();
+      }
+    } finally {
+      setScanningId(null);
+    }
+  };
+
+  const handleDeleteFolder = async (id: string) => {
+    await fetch(`/api/library?id=${id}`, { method: "DELETE" });
+    await fetchAdminData();
+    await onLibraryUpdated();
+  };
+
   const startCreateMedia = () => {
     setEditingItem(null);
     setIsCreatingMedia(true);
@@ -140,7 +437,6 @@ export default function AdminDashboardModal({
     setIsFeatured(false);
   };
 
-  // Auto-fill form fields from IMDb by title or IMDb ID (e.g. tt0338564)
   const handleAutoFillImdbForm = async () => {
     if (!title.trim()) return;
     setSyncingImdbId("form");
@@ -173,7 +469,6 @@ export default function AdminDashboardModal({
     }
   };
 
-  // One-click IMDb sync for a single item or all items
   const handleSyncImdbItem = async (mediaItemId?: string) => {
     setSyncingImdbId(mediaItemId || "all");
     setStatusBanner(null);
@@ -200,65 +495,6 @@ export default function AdminDashboardModal({
     } finally {
       setSyncingImdbId(null);
     }
-  };
-
-  const handleAddFolder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!folderName.trim() || !folderPath.trim()) return;
-    setScanningId("adding");
-    setStatusBanner(null);
-    try {
-      const res = await fetch("/api/library", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: folderName,
-          path: folderPath,
-          mediaType: folderType,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setStatusBanner(data.error || "Failed to add folder");
-      } else {
-        setFolderName("");
-        setFolderPath("");
-        setStatusBanner(
-          `Scanned "${data.folder.name}" & fetched IMDb metadata: ${data.scanResult.scannedFiles} video files (${data.scanResult.addedMovies} new movies, ${data.scanResult.addedEpisodes} new episodes).`
-        );
-        await fetchFolders();
-        await onLibraryUpdated();
-      }
-    } finally {
-      setScanningId(null);
-    }
-  };
-
-  const handleScanFolder = async (folderId?: string) => {
-    setScanningId(folderId || "all");
-    setStatusBanner(null);
-    try {
-      const res = await fetch("/api/library", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setStatusBanner(
-          `Library scan & IMDb auto-match complete: ${data.scanResult.scannedFiles} files indexed (${data.scanResult.addedMovies} movies added, ${data.scanResult.addedEpisodes} episodes added).`
-        );
-        await fetchFolders();
-        await onLibraryUpdated();
-      }
-    } finally {
-      setScanningId(null);
-    }
-  };
-
-  const handleDeleteFolder = async (id: string) => {
-    await fetch(`/api/library?id=${id}`, { method: "DELETE" });
-    await fetchFolders();
   };
 
   const handleSaveMedia = async (e: React.FormEvent) => {
@@ -332,617 +568,1354 @@ export default function AdminDashboardModal({
     await onLibraryUpdated();
   };
 
-  return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm overflow-y-auto flex justify-center p-3 sm:p-6 md:p-10 select-none"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="bg-[#181818] text-white border border-zinc-800 rounded-xl max-w-5xl w-full overflow-hidden shadow-2xl my-auto flex flex-col max-h-[90vh]"
-      >
-        {/* Modal Header */}
-        <div className="px-6 py-4 bg-[#121212] border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="bg-[#2563EB] text-white font-black text-sm px-2 py-0.5 rounded-sm">
-              O+
-            </span>
-            <h2 className="text-lg md:text-xl font-bold">
-              OwnFlix+ Library & Metadata Manager
-            </h2>
-          </div>
+  const renderActionBadge = (action: string) => {
+    switch (action) {
+      case "PLAY_COMPLETE":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700/50">
+            <Check className="w-3 h-3" /> Completed
+          </span>
+        );
+      case "PLAY_START":
+      case "PLAY_PROGRESS":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950 text-blue-300 border border-blue-700/50">
+            <Play className="w-3 h-3 fill-blue-300" /> Playback
+          </span>
+        );
+      case "MYLIST_ADD":
+      case "MYLIST_REMOVE":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950 text-purple-300 border border-purple-700/50">
+            <Bookmark className="w-3 h-3" /> Watchlist
+          </span>
+        );
+      case "PROFILE_LOGIN":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-700/50">
+            <LogIn className="w-3 h-3" /> Profile Login
+          </span>
+        );
+      case "STORAGE_UPDATE":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-700/50">
+            <HardDrive className="w-3 h-3" /> Storage
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+            {action}
+          </span>
+        );
+    }
+  };
 
+  // If accessed from outside localhost, block access completely
+  if (!isLocalhost) {
+    return (
+      <div
+        onClick={standalone ? undefined : onClose}
+        className={
+          standalone
+            ? "min-h-screen bg-[#141414] flex items-center justify-center p-6 select-none"
+            : "fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 select-none"
+        }
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#181818] border border-red-800/80 rounded-xl max-w-md w-full p-8 text-center shadow-2xl"
+        >
+          <div className="w-14 h-14 rounded-full bg-red-950/90 border border-red-700 flex items-center justify-center mx-auto mb-4">
+            <ShieldAlert className="w-7 h-7 text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">
+            Localhost Access Only
+          </h2>
+          <p className="text-sm text-zinc-400 leading-relaxed mb-6">
+            {accessError ||
+              "For security, the OwnFlix+ Admin Settings Dashboard can only be accessed directly from the host machine at localhost (127.0.0.1 / ::1)."}
+          </p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold text-sm rounded transition-colors"
+          >
+            Return to OwnFlix+
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalWatchSessions = adminProfiles.reduce(
+    (acc, p) => acc + (p.watchProgress?.length || 0),
+    0
+  );
+
+  const innerDashboard = (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className={`bg-[#181818] text-white border border-zinc-800 rounded-xl w-full overflow-hidden shadow-2xl flex flex-col ${
+        standalone ? "max-w-7xl mx-auto min-h-[85vh]" : "max-w-6xl my-auto max-h-[92vh]"
+      }`}
+    >
+      {/* Header */}
+      <div className="px-6 py-4 bg-[#121212] border-b border-zinc-800 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="bg-[#2563EB] text-white font-black text-sm px-2 py-0.5 rounded-sm">
+            O+
+          </span>
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-lg md:text-xl font-bold">
+                Admin Settings Dashboard
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-700/60">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Localhost Verified (127.0.0.1)</span>
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 hidden sm:block">
+              User profile activity monitoring, per-profile storage locations, and library metadata
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchAdminData}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border border-zinc-700 transition-colors"
+            title="Refresh dashboard data"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loadingAdmin ? "animate-spin" : ""}`}
+            />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
           <button
             onClick={onClose}
             className="text-zinc-400 hover:text-white p-1"
+            title="Close Admin Dashboard"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
+      </div>
 
-        {/* Navigation Tabs */}
-        <div className="px-6 bg-[#141414] border-b border-zinc-800 flex items-center gap-6">
-          <button
-            onClick={() => {
-              setActiveTab("folders");
-              setEditingItem(null);
-              setIsCreatingMedia(false);
-            }}
-            className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
-              activeTab === "folders"
-                ? "border-[#2563EB] text-white"
-                : "border-transparent text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <HardDrive className="w-4 h-4" />
-            <span>Local Media Folders ({folders.length})</span>
-          </button>
+      {/* Navigation Tabs */}
+      <div className="px-6 bg-[#141414] border-b border-zinc-800 flex items-center gap-6 overflow-x-auto">
+        <button
+          onClick={() => {
+            setActiveTab("activity");
+            setEditingItem(null);
+            setIsCreatingMedia(false);
+          }}
+          className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 shrink-0 transition-colors ${
+            activeTab === "activity"
+              ? "border-[#2563EB] text-white"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <Activity className="w-4 h-4 text-[#3B82F6]" />
+          <span>Profile Activity Logs ({activityLogs.length})</span>
+        </button>
 
+        <button
+          onClick={() => {
+            setActiveTab("folders");
+            setEditingItem(null);
+            setIsCreatingMedia(false);
+          }}
+          className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 shrink-0 transition-colors ${
+            activeTab === "folders"
+              ? "border-[#2563EB] text-white"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <HardDrive className="w-4 h-4 text-[#3B82F6]" />
+          <span>Per-Profile Storage Locations ({folders.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("media")}
+          className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 shrink-0 transition-colors ${
+            activeTab === "media"
+              ? "border-[#2563EB] text-white"
+              : "border-transparent text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <Film className="w-4 h-4 text-[#3B82F6]" />
+          <span>Titles &amp; IMDb Metadata ({media.length})</span>
+        </button>
+      </div>
+
+      {/* Status Notification Banner */}
+      {statusBanner && (
+        <div className="mx-6 mt-4 px-4 py-2.5 bg-emerald-950 border border-emerald-700 rounded-lg text-xs sm:text-sm text-emerald-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{statusBanner}</span>
+          </div>
           <button
-            onClick={() => setActiveTab("media")}
-            className={`py-3.5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
-              activeTab === "media"
-                ? "border-[#2563EB] text-white"
-                : "border-transparent text-zinc-400 hover:text-zinc-200"
-            }`}
+            onClick={() => setStatusBanner(null)}
+            className="text-emerald-400 hover:text-white ml-4"
           >
-            <Film className="w-4 h-4" />
-            <span>Titles & IMDb Metadata ({media.length})</span>
+            <X className="w-4 h-4" />
           </button>
         </div>
+      )}
 
-        {/* Status Notification Banner */}
-        {statusBanner && (
-          <div className="mx-6 mt-4 px-4 py-2.5 bg-emerald-950/80 border border-emerald-700/70 rounded-lg text-xs sm:text-sm text-emerald-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>{statusBanner}</span>
+      {/* Main Content Area */}
+      <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        {activeTab === "activity" ? (
+          /* ==========================================
+             PRIMARY DASHBOARD: USER PROFILE ACTIVITY LOGS
+             ========================================== */
+          <>
+            {/* Top Summary KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-[#141414] border border-zinc-800 rounded-lg p-4">
+                <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                  <span>User Profiles</span>
+                  <Users className="w-4 h-4 text-[#3B82F6]" />
+                </div>
+                <div className="text-2xl font-black text-white">
+                  {adminProfiles.length}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  Active accounts on server
+                </div>
+              </div>
+
+              <div className="bg-[#141414] border border-zinc-800 rounded-lg p-4">
+                <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                  <span>Recorded Activity Logs</span>
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-white">
+                  {activityLogs.length}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  Playback, logins &amp; changes
+                </div>
+              </div>
+
+              <div className="bg-[#141414] border border-zinc-800 rounded-lg p-4">
+                <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                  <span>Active Watch History</span>
+                  <Clock className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-2xl font-black text-white">
+                  {totalWatchSessions}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  Tracked progress items
+                </div>
+              </div>
+
+              <div className="bg-[#141414] border border-zinc-800 rounded-lg p-4">
+                <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                  <span>Storage Locations</span>
+                  <HardDrive className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="text-2xl font-black text-white">
+                  {folders.length}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  Per-profile &amp; shared paths
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => setStatusBanner(null)}
-              className="text-emerald-400 hover:text-white ml-4"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
 
-        {/* Body Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
-          {activeTab === "folders" ? (
-            <>
-              {/* Top Actions & Explanation */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
-                <div>
+            {/* User Profile Selector Cards */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  Filter Activity by User Profile
+                </h3>
+                {selectedProfileFilter !== "ALL" && (
+                  <button
+                    onClick={() => setSelectedProfileFilter("ALL")}
+                    className="text-xs text-[#3B82F6] hover:underline font-semibold"
+                  >
+                    Show All Profiles
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {adminProfiles.map((prof) => {
+                  const isSelected = selectedProfileFilter === prof.id;
+                  const profLogs = activityLogs.filter(
+                    (l) => l.profileId === prof.id
+                  );
+                  const lastLog = profLogs[0];
+                  const assignedCount = folders.filter(
+                    (f) => f.profileId === prof.id
+                  ).length;
+
+                  return (
+                    <div
+                      key={prof.id}
+                      onClick={() =>
+                        setSelectedProfileFilter(
+                          isSelected ? "ALL" : prof.id
+                        )
+                      }
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-[#2563EB]/15 border-[#2563EB] shadow-lg"
+                          : "bg-[#141414] border-zinc-800 hover:border-zinc-600"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 shadow"
+                          style={{
+                            background: `linear-gradient(145deg, ${prof.avatarColor}, #111111 150%)`,
+                          }}
+                        >
+                          {renderProfileIcon(
+                            prof.avatarIcon,
+                            "w-5 h-5 text-white"
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-sm text-white truncate">
+                              {prof.name}
+                            </span>
+                            {prof.isKids && (
+                              <span className="text-[9px] bg-amber-400 text-black font-black px-1 rounded">
+                                KIDS
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-zinc-400">
+                            {profLogs.length} events &bull;{" "}
+                            {prof.watchProgress.length} watched
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-[11px]">
+                        <span className="text-zinc-400 truncate">
+                          {lastLog
+                            ? `Active ${formatRelativeTime(lastLog.createdAt)}`
+                            : "No recent activity"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStorageProfileFilter(prof.id);
+                            setFolderProfileId(prof.id);
+                            setActiveTab("folders");
+                          }}
+                          className="text-[#3B82F6] hover:underline font-semibold shrink-0 ml-2"
+                        >
+                          {assignedCount} folder{assignedCount === 1 ? "" : "s"} →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Two-Column Activity Timeline & Watch Progress Breakdown */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left 2 Columns: Chronological Activity Log Stream */}
+              <div className="lg:col-span-2 bg-[#141414] border border-zinc-800 rounded-xl p-4 flex flex-col">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-zinc-800">
+                  <div>
+                    <h3 className="font-bold text-sm md:text-base text-white">
+                      User Profile Activity Log
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Showing {filteredActivityLogs.length} event
+                      {filteredActivityLogs.length === 1 ? "" : "s"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedActionFilter}
+                      onChange={(e) => setSelectedActionFilter(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1.5 text-xs text-white outline-none"
+                    >
+                      <option value="ALL">All Event Types</option>
+                      <option value="PLAYBACK">Playback &amp; Progress</option>
+                      <option value="PROFILE_LOGIN">Profile Logins</option>
+                      <option value="MYLIST">My List Changes</option>
+                      <option value="STORAGE_UPDATE">Storage Updates</option>
+                    </select>
+
+                    {activityLogs.length > 0 && (
+                      <button
+                        onClick={handleClearActivityLogs}
+                        className="text-xs text-zinc-400 hover:text-red-400 px-2.5 py-1.5 rounded border border-zinc-800 hover:border-red-800 transition-colors"
+                      >
+                        Clear Logs
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {filteredActivityLogs.length === 0 ? (
+                  <div className="py-12 text-center text-zinc-500 text-sm">
+                    No activity logs recorded for the current filter.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[430px] overflow-y-auto pr-1">
+                    {filteredActivityLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex items-start gap-3 p-3 rounded-lg bg-[#181818] border border-zinc-800/90 hover:border-zinc-700 transition-colors"
+                      >
+                        <div
+                          className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 mt-0.5"
+                          style={{
+                            background: `linear-gradient(145deg, ${
+                              log.profile?.avatarColor || "#2563EB"
+                            }, #111111 150%)`,
+                          }}
+                        >
+                          {renderProfileIcon(
+                            log.profile?.avatarIcon || "smile",
+                            "w-4 h-4 text-white"
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="font-bold text-xs text-white">
+                              {log.profile?.name || "Profile"}
+                            </span>
+                            {renderActionBadge(log.action)}
+                            <span className="text-[11px] text-zinc-500 ml-auto">
+                              {formatRelativeTime(log.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-300 leading-relaxed">
+                            {log.details}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Per-Profile Watch Progress & Active Sessions */}
+              <div className="bg-[#141414] border border-zinc-800 rounded-xl p-4 flex flex-col">
+                <div className="pb-3 mb-3 border-b border-zinc-800">
                   <h3 className="font-bold text-sm md:text-base text-white">
-                    Automatic Local Disk Indexer + IMDb Poster & Metadata Scraper
+                    Watch History by Profile
                   </h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    Drop any <code className="text-zinc-200">.mp4</code>,{" "}
-                    <code className="text-zinc-200">.mkv</code>,{" "}
-                    <code className="text-zinc-200">.webm</code>, or{" "}
-                    <code className="text-zinc-200">.avi</code> files into your
-                    watched folders. OwnFlix+ automatically probes resolution,
-                    duration, and queries IMDb for official posters, plot, cast,
-                    director, and ratings.
+                  <p className="text-xs text-zinc-400">
+                    Playback progress &amp; completion status per user
                   </p>
                 </div>
 
-                <button
-                  onClick={() => handleScanFolder()}
-                  disabled={scanningId !== null}
-                  className="shrink-0 flex items-center gap-2 bg-[#2563EB] hover:bg-[#3B82F6] disabled:opacity-50 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors"
-                >
-                  <RefreshCw
-                    className={`w-4 h-4 ${
-                      scanningId === "all" ? "animate-spin" : ""
-                    }`}
-                  />
-                  <span>
-                    {scanningId === "all"
-                      ? "Scanning & Matching IMDb..."
-                      : "Scan All Folders"}
-                  </span>
-                </button>
-              </div>
-
-              {/* Watched Folders List */}
-              <div className="space-y-3">
-                {folders.map((folder) => (
-                  <div
-                    key={folder.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800 rounded-lg p-4"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-bold text-sm md:text-base text-white">
-                          {folder.name}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                          {folder.mediaType}
-                        </span>
-                        <span className="text-xs text-emerald-400 font-medium">
-                          {folder.itemCount} video files
-                        </span>
-                      </div>
-                      <code className="text-xs text-zinc-400 block mt-1 truncate">
-                        {folder.path}
-                      </code>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleScanFolder(folder.id)}
-                        disabled={scanningId !== null}
-                        className="flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded border border-zinc-700 transition-colors"
+                <div className="space-y-4 max-h-[430px] overflow-y-auto pr-1">
+                  {adminProfiles
+                    .filter(
+                      (p) =>
+                        selectedProfileFilter === "ALL" ||
+                        p.id === selectedProfileFilter
+                    )
+                    .map((prof) => (
+                      <div
+                        key={`hist-${prof.id}`}
+                        className="bg-[#181818] border border-zinc-800 rounded-lg p-3 space-y-2.5"
                       >
-                        <RefreshCw
-                          className={`w-3.5 h-3.5 ${
-                            scanningId === folder.id ? "animate-spin" : ""
-                          }`}
-                        />
-                        <span>Rescan</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleDeleteFolder(folder.id)}
-                        className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors"
-                        title="Remove folder from watcher"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Add New Local Folder Form */}
-              <form
-                onSubmit={handleAddFolder}
-                className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-5"
-              >
-                <h4 className="text-sm font-bold flex items-center gap-2 mb-4">
-                  <FolderPlus className="w-4 h-4 text-[#2563EB]" />
-                  <span>Add Local Directory to Watch</span>
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      value={folderName}
-                      onChange={(e) => setFolderName(e.target.value)}
-                      placeholder="e.g. 4K Movies Archive"
-                      required
-                      className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Folder Path on Disk
-                    </label>
-                    <input
-                      type="text"
-                      value={folderPath}
-                      onChange={(e) => setFolderPath(e.target.value)}
-                      placeholder="e.g. C:\jellyfin-media-server\Movies"
-                      required
-                      className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-zinc-400 mb-1">
-                      Content Type
-                    </label>
-                    <select
-                      value={folderType}
-                      onChange={(e) =>
-                        setFolderType(
-                          e.target.value as "MOVIE" | "SERIES" | "MIXED"
-                        )
-                      }
-                      className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none"
-                    >
-                      <option value="MIXED">Auto-Detect (Movies & TV)</option>
-                      <option value="MOVIE">Movies Only</option>
-                      <option value="SERIES">TV Series (S01E01)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={scanningId !== null}
-                  className="bg-white hover:bg-zinc-200 text-black font-bold text-xs sm:text-sm px-5 py-2 rounded transition-colors"
-                >
-                  {scanningId === "adding"
-                    ? "Adding & Fetching IMDb..."
-                    : "Add & Scan Folder"}
-                </button>
-              </form>
-            </>
-          ) : editingItem || isCreatingMedia ? (
-            /* Metadata Editor Form */
-            <form onSubmit={handleSaveMedia} className="space-y-4">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <h3 className="font-bold text-base">
-                  {isCreatingMedia
-                    ? "Add New Title (Auto-Searches IMDb)"
-                    : `Editing Metadata: ${editingItem?.title}`}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingItem(null);
-                    setIsCreatingMedia(false);
-                  }}
-                  className="text-xs text-zinc-400 hover:text-white"
-                >
-                  ← Back to All Titles
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Title or IMDb ID (e.g. tt0338564)
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                    placeholder="Enter movie title or ttXXXXXXX"
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Release Year
-                  </label>
-                  <input
-                    type="number"
-                    value={releaseYear}
-                    onChange={(e) => setReleaseYear(Number(e.target.value))}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={handleAutoFillImdbForm}
-                    disabled={syncingImdbId !== null || !title.trim()}
-                    className="w-full flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold text-xs py-2.5 px-3 rounded transition-colors"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>
-                      {syncingImdbId === "form"
-                        ? "Searching IMDb..."
-                        : "Auto-Fill from IMDb"}
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Maturity Rating
-                  </label>
-                  <input
-                    type="text"
-                    value={maturityRating}
-                    onChange={(e) => setMaturityRating(e.target.value)}
-                    placeholder="TV-MA, PG-13, R"
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Quality Badge
-                  </label>
-                  <input
-                    type="text"
-                    value={resolution}
-                    onChange={(e) => setResolution(e.target.value)}
-                    placeholder="4K Ultra HD, 1080p HD"
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Genres (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={genres}
-                    onChange={(e) => setGenres(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1">
-                  Tagline
-                </label>
-                <input
-                  type="text"
-                  value={tagline}
-                  onChange={(e) => setTagline(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1">
-                  Synopsis / Overview
-                </label>
-                <textarea
-                  rows={3}
-                  value={overview}
-                  onChange={(e) => setOverview(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    IMDb Poster Image URL
-                  </label>
-                  <input
-                    type="text"
-                    value={posterUrl}
-                    onChange={(e) => setPosterUrl(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Backdrop / Still Image URL
-                  </label>
-                  <input
-                    type="text"
-                    value={backdropUrl}
-                    onChange={(e) => setBackdropUrl(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Stream URL (MP4 / `/api/stream?...`)
-                  </label>
-                  <input
-                    type="text"
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Cast
-                  </label>
-                  <input
-                    type="text"
-                    value={cast}
-                    onChange={(e) => setCast(e.target.value)}
-                    placeholder="Lead actors"
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Director
-                  </label>
-                  <input
-                    type="text"
-                    value={director}
-                    onChange={(e) => setDirector(e.target.value)}
-                    placeholder="Director name"
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Skip Intro & Credits Markers */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-zinc-900/70 border border-zinc-800 p-3.5 rounded-lg">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Intro Start (seconds)
-                  </label>
-                  <input
-                    type="number"
-                    value={introStart}
-                    onChange={(e) => setIntroStart(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-1.5 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Intro End (seconds — Skip Intro target)
-                  </label>
-                  <input
-                    type="number"
-                    value={introEnd}
-                    onChange={(e) => setIntroEnd(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-1.5 text-sm text-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">
-                    Credits Start (seconds — Next Ep trigger)
-                  </label>
-                  <input
-                    type="number"
-                    value={creditsStart}
-                    onChange={(e) => setCreditsStart(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-1.5 text-sm text-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2.5 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={isFeatured}
-                  onChange={(e) => setIsFeatured(e.target.checked)}
-                  className="w-4 h-4 accent-[#2563EB]"
-                />
-                <span className="text-sm text-zinc-200 font-medium">
-                  Feature this title on the Home Hero Billboard
-                </span>
-              </label>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingItem(null);
-                    setIsCreatingMedia(false);
-                  }}
-                  className="px-4 py-2 text-xs sm:text-sm border border-zinc-600 rounded text-zinc-300 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingMedia}
-                  className="px-6 py-2 text-xs sm:text-sm bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold rounded transition-colors"
-                >
-                  {savingMedia ? "Saving..." : "Save Metadata"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            /* Media Catalog List */
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <p className="text-xs sm:text-sm text-zinc-400">
-                  Every scanned movie automatically queries IMDb for its
-                  official poster, backdrop still, synopsis, cast, director, and
-                  rating.
-                </p>
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <button
-                    onClick={() => handleSyncImdbItem()}
-                    disabled={syncingImdbId !== null}
-                    className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold text-xs sm:text-sm px-3.5 py-2 rounded transition-colors"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>
-                      {syncingImdbId === "all"
-                        ? "Syncing with IMDb..."
-                        : "Sync All with IMDb"}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={startCreateMedia}
-                    className="flex items-center gap-1.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs sm:text-sm px-4 py-2 rounded transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Title</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="divide-y divide-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
-                {media.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-4 p-3.5 bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={item.posterUrl || item.backdropUrl}
-                        alt={item.title}
-                        className="w-12 h-16 object-cover rounded bg-zinc-800 shrink-0 border border-zinc-700"
-                      />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-white truncate">
-                            {item.title}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-6 h-6 rounded flex items-center justify-center"
+                              style={{
+                                background: `linear-gradient(145deg, ${prof.avatarColor}, #111111 150%)`,
+                              }}
+                            >
+                              {renderProfileIcon(
+                                prof.avatarIcon,
+                                "w-3.5 h-3.5 text-white"
+                              )}
+                            </div>
+                            <span className="font-bold text-xs text-white">
+                              {prof.name}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-zinc-400">
+                            {prof.watchProgress.length} title
+                            {prof.watchProgress.length === 1 ? "" : "s"}
                           </span>
-                          {item.isFeatured && (
-                            <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-semibold">
-                              <Star className="w-2.5 h-2.5 fill-amber-300" />
-                              Billboard
-                            </span>
-                          )}
-                          {item.filePath && (
-                            <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-700/50 px-1.5 py-0.5 rounded font-semibold">
-                              Local Disk
-                            </span>
-                          )}
                         </div>
-                        <div className="text-xs text-zinc-400 mt-0.5 truncate">
-                          {item.type} • {item.releaseYear} •{" "}
-                          {item.maturityRating} • {item.genres}
-                        </div>
-                        {item.cast && (
-                          <div className="text-[11px] text-zinc-500 truncate mt-0.5">
-                            Cast: {item.cast}
+
+                        {prof.watchProgress.length === 0 ? (
+                          <div className="text-xs text-zinc-500 py-2">
+                            No watch history yet.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {prof.watchProgress.slice(0, 6).map((wp) => {
+                              const pct =
+                                wp.durationSeconds > 0
+                                  ? Math.min(
+                                      100,
+                                      Math.round(
+                                        (wp.positionSeconds /
+                                          wp.durationSeconds) *
+                                          100
+                                      )
+                                    )
+                                  : 0;
+                              return (
+                                <div
+                                  key={wp.id}
+                                  className="bg-[#121212] border border-zinc-800/80 rounded p-2 text-xs"
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="font-semibold text-zinc-200 truncate">
+                                      {wp.mediaItem.title}
+                                      {wp.episode
+                                        ? ` S${wp.episode.seasonNumber}:E${wp.episode.episodeNumber}`
+                                        : ""}
+                                    </span>
+                                    <span
+                                      className={`text-[10px] font-bold shrink-0 ${
+                                        wp.completed
+                                          ? "text-emerald-400"
+                                          : "text-[#3B82F6]"
+                                      }`}
+                                    >
+                                      {wp.completed ? "Done" : `${pct}%`}
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        wp.completed
+                                          ? "bg-emerald-500"
+                                          : "bg-[#2563EB]"
+                                      }`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500 mt-1 flex justify-between">
+                                    <span>
+                                      {Math.floor(wp.positionSeconds / 60)}m /{" "}
+                                      {Math.floor(wp.durationSeconds / 60)}m
+                                    </span>
+                                    <span>
+                                      {formatRelativeTime(wp.updatedAt)}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleSyncImdbItem(item.id)}
-                        disabled={syncingImdbId !== null}
-                        className="flex items-center gap-1 text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded transition-colors"
-                        title="Refresh Metadata & Poster from IMDb"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>
-                          {syncingImdbId === item.id ? "..." : "IMDb"}
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => setEditingItem(item)}
-                        className="flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded border border-zinc-700"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleDeleteMedia(item.id, item.title)}
-                        className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
-                        title="Delete from library"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                </div>
               </div>
             </div>
-          )}
-        </div>
+          </>
+        ) : activeTab === "folders" ? (
+          /* ==========================================
+             TAB 2: PER-USER-PROFILE STORAGE LOCATIONS
+             ========================================== */
+          <>
+            {/* Top Explanation & Scan All Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#141414] border border-zinc-800 rounded-lg p-4">
+              <div>
+                <h3 className="font-bold text-sm md:text-base text-white">
+                  Storage Locations per User Profile
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Assign local disk folders (<code className="text-zinc-200">.mp4</code>,{" "}
+                  <code className="text-zinc-200">.mkv</code>,{" "}
+                  <code className="text-zinc-200">.webm</code>,{" "}
+                  <code className="text-zinc-200">.avi</code>) to specific user
+                  profiles or share them across all profiles. Editing a storage
+                  location updates which profile can access those files.
+                </p>
+              </div>
+
+              <button
+                onClick={() => handleScanFolder()}
+                disabled={scanningId !== null}
+                className="shrink-0 flex items-center gap-2 bg-[#2563EB] hover:bg-[#3B82F6] disabled:opacity-50 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded transition-colors"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${
+                    scanningId === "all" ? "animate-spin" : ""
+                  }`}
+                />
+                <span>
+                  {scanningId === "all"
+                    ? "Scanning All Storage..."
+                    : "Scan All Storage Locations"}
+                </span>
+              </button>
+            </div>
+
+            {/* Filter Strip by User Profile */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setStorageProfileFilter("ALL")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  storageProfileFilter === "ALL"
+                    ? "bg-[#2563EB] border-[#2563EB] text-white"
+                    : "bg-[#141414] border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                }`}
+              >
+                All Storage ({folders.length})
+              </button>
+              <button
+                onClick={() => setStorageProfileFilter("SHARED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  storageProfileFilter === "SHARED"
+                    ? "bg-[#2563EB] border-[#2563EB] text-white"
+                    : "bg-[#141414] border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                }`}
+              >
+                Shared / Global ({folders.filter((f) => !f.profileId).length})
+              </button>
+              {adminProfiles.map((prof) => {
+                const count = folders.filter(
+                  (f) => f.profileId === prof.id
+                ).length;
+                return (
+                  <button
+                    key={`filter-prof-${prof.id}`}
+                    onClick={() => {
+                      setStorageProfileFilter(prof.id);
+                      setFolderProfileId(prof.id);
+                    }}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      storageProfileFilter === prof.id
+                        ? "bg-[#2563EB] border-[#2563EB] text-white"
+                        : "bg-[#141414] border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                    }`}
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: prof.avatarColor }}
+                    >
+                      {renderProfileIcon(
+                        prof.avatarIcon,
+                        "w-2.5 h-2.5 text-white"
+                      )}
+                    </span>
+                    <span>
+                      {prof.name} ({count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Storage Locations List with Inline Edit Support */}
+            <div className="space-y-3">
+              {filteredFolders.length === 0 ? (
+                <div className="bg-[#141414] border border-zinc-800 rounded-lg p-8 text-center text-sm text-zinc-400">
+                  No storage locations assigned to this filter yet. Use the form
+                  below to add a storage folder for this user profile.
+                </div>
+              ) : (
+                filteredFolders.map((folder) => {
+                  const isEditingThis = editingFolderId === folder.id;
+                  return (
+                    <div
+                      key={folder.id}
+                      className="bg-[#141414] border border-zinc-800 rounded-lg p-4"
+                    >
+                      {isEditingThis ? (
+                        <form
+                          onSubmit={handleSaveFolderEdit}
+                          className="space-y-4"
+                        >
+                          <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[#3B82F6]">
+                              Editing Storage Location
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setEditingFolderId(null)}
+                              className="text-xs text-zinc-400 hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <div>
+                              <label className="block text-[11px] text-zinc-400 mb-1">
+                                Assigned User Profile
+                              </label>
+                              <select
+                                value={editFolderProfileId}
+                                onChange={(e) =>
+                                  setEditFolderProfileId(e.target.value)
+                                }
+                                className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded px-3 py-2 text-xs text-white outline-none"
+                              >
+                                <option value="ALL">
+                                  Shared (All User Profiles)
+                                </option>
+                                {adminProfiles.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} {p.isKids ? "(Kids)" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] text-zinc-400 mb-1">
+                                Display Name
+                              </label>
+                              <input
+                                type="text"
+                                value={editFolderName}
+                                onChange={(e) =>
+                                  setEditFolderName(e.target.value)
+                                }
+                                required
+                                className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded px-3 py-2 text-xs text-white outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] text-zinc-400 mb-1">
+                                Folder Path on Disk
+                              </label>
+                              <input
+                                type="text"
+                                value={editFolderPath}
+                                onChange={(e) =>
+                                  setEditFolderPath(e.target.value)
+                                }
+                                required
+                                className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded px-3 py-2 text-xs text-white outline-none font-mono"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] text-zinc-400 mb-1">
+                                Content Type
+                              </label>
+                              <select
+                                value={editFolderType}
+                                onChange={(e) =>
+                                  setEditFolderType(
+                                    e.target.value as
+                                      | "MOVIE"
+                                      | "SERIES"
+                                      | "MIXED"
+                                  )
+                                }
+                                className="w-full bg-zinc-900 border border-zinc-700 focus:border-[#2563EB] rounded px-3 py-2 text-xs text-white outline-none"
+                              >
+                                <option value="MIXED">
+                                  Auto-Detect (Movies &amp; TV)
+                                </option>
+                                <option value="MOVIE">Movies Only</option>
+                                <option value="SERIES">
+                                  TV Series (S01E01)
+                                </option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingFolderId(null)}
+                              className="px-3 py-1.5 rounded border border-zinc-700 text-xs text-zinc-300 hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={savingFolderEdit}
+                              className="px-4 py-1.5 rounded bg-[#2563EB] hover:bg-[#3B82F6] text-xs font-bold text-white"
+                            >
+                              {savingFolderEdit
+                                ? "Saving & Scanning..."
+                                : "Save Storage Location"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2.5">
+                              <FolderOpen className="w-4 h-4 text-[#3B82F6] shrink-0" />
+                              <span className="font-bold text-sm md:text-base text-white">
+                                {folder.name}
+                              </span>
+
+                              {/* Assigned Profile Badge */}
+                              {folder.profile ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#2563EB]/20 text-blue-200 border border-[#2563EB]/50">
+                                  <span
+                                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                                    style={{
+                                      backgroundColor:
+                                        folder.profile.avatarColor,
+                                    }}
+                                  >
+                                    {renderProfileIcon(
+                                      folder.profile.avatarIcon,
+                                      "w-2.5 h-2.5 text-white"
+                                    )}
+                                  </span>
+                                  <span>Profile: {folder.profile.name}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                                  <Users className="w-3 h-3 text-zinc-400" />
+                                  <span>Shared (All Profiles)</span>
+                                </span>
+                              )}
+
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                                {folder.mediaType}
+                              </span>
+                              <span className="text-xs text-emerald-400 font-medium">
+                                {folder.itemCount} video files
+                              </span>
+                            </div>
+                            <code className="text-xs text-zinc-400 block mt-1.5 truncate">
+                              {folder.path}
+                            </code>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => startEditFolder(folder)}
+                              className="flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded border border-zinc-700 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-[#3B82F6]" />
+                              <span>Edit Path / Profile</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleScanFolder(folder.id)}
+                              disabled={scanningId !== null}
+                              className="flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded border border-zinc-700 transition-colors"
+                            >
+                              <RefreshCw
+                                className={`w-3.5 h-3.5 ${
+                                  scanningId === folder.id ? "animate-spin" : ""
+                                }`}
+                              />
+                              <span>Rescan</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteFolder(folder.id)}
+                              className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors"
+                              title="Remove storage location"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Add New Storage Location per Profile Form */}
+            <form
+              onSubmit={handleAddFolder}
+              className="bg-[#141414] border border-zinc-800 rounded-lg p-5"
+            >
+              <h4 className="text-sm font-bold flex items-center gap-2 mb-4">
+                <FolderPlus className="w-4 h-4 text-[#2563EB]" />
+                <span>Add Storage Location for User Profile</span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    Assign to User Profile
+                  </label>
+                  <select
+                    value={folderProfileId}
+                    onChange={(e) => setFolderProfileId(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none"
+                  >
+                    <option value="ALL">Shared (All User Profiles)</option>
+                    {adminProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.isKids ? "(Kids)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    Storage Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={folderName}
+                    onChange={(e) => setFolderName(e.target.value)}
+                    placeholder="e.g. Alex's 4K Movies"
+                    required
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    Folder Path on Disk
+                  </label>
+                  <input
+                    type="text"
+                    value={folderPath}
+                    onChange={(e) => setFolderPath(e.target.value)}
+                    placeholder="e.g. C:\jellyfin-media-server\Movies"
+                    required
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    Content Type
+                  </label>
+                  <select
+                    value={folderType}
+                    onChange={(e) =>
+                      setFolderType(
+                        e.target.value as "MOVIE" | "SERIES" | "MIXED"
+                      )
+                    }
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-white rounded px-3 py-2 text-sm text-white outline-none"
+                  >
+                    <option value="MIXED">Auto-Detect (Movies &amp; TV)</option>
+                    <option value="MOVIE">Movies Only</option>
+                    <option value="SERIES">TV Series (S01E01)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={scanningId !== null}
+                className="bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded transition-colors"
+              >
+                {scanningId === "adding"
+                  ? "Adding & Scanning Storage..."
+                  : "Add & Scan Storage Location"}
+              </button>
+            </form>
+          </>
+        ) : editingItem || isCreatingMedia ? (
+          /* Metadata Editor Form */
+          <form onSubmit={handleSaveMedia} className="space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="font-bold text-base">
+                {isCreatingMedia
+                  ? "Add New Title (Auto-Searches IMDb)"
+                  : `Editing Metadata: ${editingItem?.title}`}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingItem(null);
+                  setIsCreatingMedia(false);
+                }}
+                className="text-xs text-zinc-400 hover:text-white"
+              >
+                ← Back to All Titles
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+              <div className="sm:col-span-2">
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Title or IMDb ID (e.g. tt0338564)
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  placeholder="Enter movie title or ttXXXXXXX"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Release Year
+                </label>
+                <input
+                  type="number"
+                  value={releaseYear}
+                  onChange={(e) => setReleaseYear(Number(e.target.value))}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={handleAutoFillImdbForm}
+                  disabled={syncingImdbId !== null || !title.trim()}
+                  className="w-full flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold text-xs py-2.5 px-3 rounded transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>
+                    {syncingImdbId === "form"
+                      ? "Searching IMDb..."
+                      : "Auto-Fill from IMDb"}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Maturity Rating
+                </label>
+                <input
+                  type="text"
+                  value={maturityRating}
+                  onChange={(e) => setMaturityRating(e.target.value)}
+                  placeholder="TV-MA, PG-13, R"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Quality Badge
+                </label>
+                <input
+                  type="text"
+                  value={resolution}
+                  onChange={(e) => setResolution(e.target.value)}
+                  placeholder="4K Ultra HD, 1080p HD"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Genres (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={genres}
+                  onChange={(e) => setGenres(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">
+                Tagline
+              </label>
+              <input
+                type="text"
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">
+                Synopsis / Overview
+              </label>
+              <textarea
+                rows={3}
+                value={overview}
+                onChange={(e) => setOverview(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  IMDb Poster Image URL
+                </label>
+                <input
+                  type="text"
+                  value={posterUrl}
+                  onChange={(e) => setPosterUrl(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Backdrop / Still Image URL
+                </label>
+                <input
+                  type="text"
+                  value={backdropUrl}
+                  onChange={(e) => setBackdropUrl(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Stream URL (MP4 / `/api/stream?...`)
+                </label>
+                <input
+                  type="text"
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Cast</label>
+                <input
+                  type="text"
+                  value={cast}
+                  onChange={(e) => setCast(e.target.value)}
+                  placeholder="Lead actors"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Director
+                </label>
+                <input
+                  type="text"
+                  value={director}
+                  onChange={(e) => setDirector(e.target.value)}
+                  placeholder="Director name"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Skip Intro & Credits Markers */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-zinc-900/70 border border-zinc-800 p-3.5 rounded-lg">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Intro Start (seconds)
+                </label>
+                <input
+                  type="number"
+                  value={introStart}
+                  onChange={(e) => setIntroStart(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-1.5 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Intro End (seconds — Skip Intro target)
+                </label>
+                <input
+                  type="number"
+                  value={introEnd}
+                  onChange={(e) => setIntroEnd(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-1.5 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">
+                  Credits Start (seconds — Next Ep trigger)
+                </label>
+                <input
+                  type="number"
+                  value={creditsStart}
+                  onChange={(e) => setCreditsStart(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-1.5 text-sm text-white outline-none"
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={isFeatured}
+                onChange={(e) => setIsFeatured(e.target.checked)}
+                className="w-4 h-4 accent-[#2563EB]"
+              />
+              <span>Feature on Hero Billboard Banner</span>
+            </label>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingItem(null);
+                  setIsCreatingMedia(false);
+                }}
+                className="px-4 py-2 text-sm border border-zinc-600 text-zinc-300 rounded hover:border-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingMedia}
+                className="px-6 py-2 text-sm bg-[#2563EB] hover:bg-[#3B82F6] text-white font-bold rounded transition-colors"
+              >
+                {savingMedia ? "Saving..." : "Save Metadata"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* Media Catalog Table + Bulk IMDb Sync */
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs sm:text-sm text-zinc-400">
+                Fetch official posters, cast, plot synopses, and ratings from
+                IMDb or customize any title manually.
+              </p>
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => handleSyncImdbItem()}
+                  disabled={syncingImdbId !== null}
+                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold text-xs sm:text-sm px-4 py-2 rounded transition-colors"
+                >
+                  <Sparkles
+                    className={`w-4 h-4 ${
+                      syncingImdbId === "all" ? "animate-spin" : ""
+                    }`}
+                  />
+                  <span>
+                    {syncingImdbId === "all"
+                      ? "Syncing All with IMDb..."
+                      : "Sync All Posters & Info from IMDb"}
+                  </span>
+                </button>
+
+                <button
+                  onClick={startCreateMedia}
+                  className="flex items-center gap-1.5 bg-white hover:bg-zinc-200 text-black font-bold text-xs sm:text-sm px-4 py-2 rounded transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Custom Title</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="divide-y divide-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
+              {media.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between gap-4 p-3.5 bg-zinc-900/40 hover:bg-zinc-900/80 transition-colors"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={m.posterUrl || m.backdropUrl}
+                      alt={m.title}
+                      className="w-12 h-16 object-cover rounded bg-zinc-800 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-white truncate">
+                          {m.title}
+                        </span>
+                        {m.isFeatured && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded">
+                            <Star className="w-2.5 h-2.5 fill-amber-300" />
+                            BILLBOARD
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-2 mt-0.5">
+                        <span>{m.type}</span>
+                        <span>•</span>
+                        <span>{m.releaseYear}</span>
+                        <span>•</span>
+                        <span>{m.resolution}</span>
+                        {m.filePath && (
+                          <>
+                            <span>•</span>
+                            <span className="text-emerald-400 font-mono truncate max-w-[240px]">
+                              {m.filePath}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleSyncImdbItem(m.id)}
+                      disabled={syncingImdbId !== null}
+                      className="flex items-center gap-1 text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-2.5 py-1.5 rounded transition-colors"
+                      title="Fetch official poster & metadata from IMDb"
+                    >
+                      <Sparkles
+                        className={`w-3.5 h-3.5 ${
+                          syncingImdbId === m.id ? "animate-spin" : ""
+                        }`}
+                      />
+                      <span className="hidden sm:inline">IMDb Sync</span>
+                    </button>
+
+                    <button
+                      onClick={() => setEditingItem(m)}
+                      className="flex items-center gap-1 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded border border-zinc-700"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteMedia(m.id, m.title)}
+                      className="p-1.5 text-zinc-400 hover:text-red-400"
+                      title="Delete title"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+
+  if (standalone) {
+    return (
+      <div className="min-h-screen bg-[#141414] p-4 sm:p-8 select-none">
+        {innerDashboard}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/85 overflow-y-auto flex justify-center p-3 sm:p-6 md:p-10 select-none"
+    >
+      {innerDashboard}
     </div>
   );
 }

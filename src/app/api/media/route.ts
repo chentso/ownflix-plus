@@ -10,27 +10,57 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const profileId = searchParams.get("profileId");
 
-  const items = await prisma.mediaItem.findMany({
-    include: {
-      episodes: {
-        orderBy: [{ seasonNumber: "asc" }, { episodeNumber: "asc" }],
+  const [items, allFolders] = await Promise.all([
+    prisma.mediaItem.findMany({
+      include: {
+        episodes: {
+          orderBy: [{ seasonNumber: "asc" }, { episodeNumber: "asc" }],
+        },
+        watchProgress: profileId
+          ? {
+              where: { profileId },
+              include: { episode: true },
+            }
+          : false,
+        myList: profileId
+          ? {
+              where: { profileId },
+            }
+          : false,
       },
-      watchProgress: profileId
-        ? {
-            where: { profileId },
-            include: { episode: true },
-          }
-        : false,
-      myList: profileId
-        ? {
-            where: { profileId },
-          }
-        : false,
-    },
-    orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
-  });
+      orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.libraryFolder.findMany(),
+  ]);
 
-  const formatted = items.map((item) => {
+  // Filter local disk items by per-profile storage locations when profileId is provided
+  const normalizePath = (p: string) =>
+    p.replace(/\//g, "\\").toLowerCase().replace(/\\+$/, "");
+
+  const visibleItems = profileId
+    ? items.filter((item) => {
+        const candidatePath =
+          item.filePath ||
+          item.episodes.find((ep) => Boolean(ep.filePath))?.filePath ||
+          null;
+        if (!candidatePath || allFolders.length === 0) return true;
+
+        const normFile = normalizePath(candidatePath);
+        const matchingFolders = allFolders.filter((f) => {
+          const normFolder = normalizePath(f.path);
+          return (
+            normFile === normFolder || normFile.startsWith(normFolder + "\\")
+          );
+        });
+
+        if (matchingFolders.length === 0) return true;
+        return matchingFolders.some(
+          (f) => f.profileId === null || f.profileId === profileId
+        );
+      })
+    : items;
+
+  const formatted = visibleItems.map((item) => {
     const progress =
       Array.isArray(item.watchProgress) && item.watchProgress.length > 0
         ? item.watchProgress[0]

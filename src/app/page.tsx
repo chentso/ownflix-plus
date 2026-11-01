@@ -49,9 +49,9 @@ export default function OwnFlixApp() {
 
   const [adminModal, setAdminModal] = useState<{
     open: boolean;
-    tab: "folders" | "media";
+    tab: "activity" | "folders" | "media";
     editItem?: MediaItem | null;
-  }>({ open: false, tab: "folders", editItem: null });
+  }>({ open: false, tab: "activity", editItem: null });
 
   const [accountModalOpen, setAccountModalOpen] = useState(false);
 
@@ -87,6 +87,15 @@ export default function OwnFlixApp() {
           );
           return next;
         });
+        fetch("/api/admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profileId: profile.id,
+            action: "PROFILE_LOGIN",
+            details: `Signed into profile "${profile.name}"`,
+          }),
+        }).catch(() => {});
       } else {
         window.localStorage.removeItem("ownflix_active_profile_id");
       }
@@ -266,6 +275,22 @@ export default function OwnFlixApp() {
     setDetailItem(null);
     setContextMenu(null);
     setPlayingState({ item, episode, startFromBeginning });
+    if (activeProfile) {
+      const epLabel = episode
+        ? ` (S${episode.seasonNumber}:E${episode.episodeNumber} "${episode.title}")`
+        : "";
+      fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId: activeProfile.id,
+          action: "PLAY_START",
+          details: `Started playing "${item.title}"${epLabel}`,
+          mediaItemId: item.id,
+          mediaTitle: item.title,
+        }),
+      }).catch(() => {});
+    }
   };
 
   const handleOpenContextMenu = useCallback(
@@ -502,7 +527,7 @@ export default function OwnFlixApp() {
         }}
         onManageProfiles={() => handleSelectProfile(null)}
         onOpenAccountSettings={() => setAccountModalOpen(true)}
-        onOpenAdmin={(tab = "folders") =>
+        onOpenAdmin={(tab = "activity") =>
           setAdminModal({ open: true, tab, editItem: null })
         }
       />
@@ -973,7 +998,7 @@ export default function OwnFlixApp() {
           initialEditItem={adminModal.editItem}
           media={media}
           onClose={() =>
-            setAdminModal({ open: false, tab: "folders", editItem: null })
+            setAdminModal({ open: false, tab: "activity", editItem: null })
           }
           onLibraryUpdated={() => fetchMedia(activeProfile.id)}
         />

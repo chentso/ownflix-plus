@@ -14,6 +14,7 @@ import {
   PlusCircle,
   KeyRound,
   Lock,
+  Activity,
 } from "lucide-react";
 
 export type NavCategory = "HOME" | "SERIES" | "MOVIES" | "LOCAL" | "MY_LIST";
@@ -28,7 +29,7 @@ interface NavbarProps {
   onSwitchProfile: (profile: Profile) => void;
   onManageProfiles: () => void;
   onOpenAccountSettings: () => void;
-  onOpenAdmin: (tab?: "folders" | "media") => void;
+  onOpenAdmin: (tab?: "activity" | "folders" | "media") => void;
 }
 
 export default function Navbar({
@@ -46,7 +47,20 @@ export default function Navbar({
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isLocalhost, setIsLocalhost] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const h = window.location.hostname.toLowerCase();
+      setIsLocalhost(
+        h === "localhost" ||
+          h === "127.0.0.1" ||
+          h === "::1" ||
+          h === "[::1]"
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -160,15 +174,17 @@ export default function Navbar({
           )}
         </div>
 
-        {/* Quick Server / Library Button */}
-        <button
-          onClick={() => onOpenAdmin("folders")}
-          className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-1.5 rounded transition-colors"
-          title="Manage Local Folders & Media Metadata"
-        >
-          <HardDrive className="w-3.5 h-3.5 text-[#2563EB]" />
-          <span>Library Manager</span>
-        </button>
+        {/* Localhost-Only Admin Settings Dashboard Button */}
+        {isLocalhost && (
+          <button
+            onClick={() => onOpenAdmin("activity")}
+            className="hidden sm:flex items-center gap-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 px-3 py-1.5 rounded transition-colors"
+            title="Admin Settings Dashboard (Localhost Only)"
+          >
+            <Activity className="w-3.5 h-3.5 text-[#3B82F6]" />
+            <span>Admin Dashboard</span>
+          </button>
+        )}
 
         {/* Profile Dropdown */}
         <div
@@ -200,7 +216,7 @@ export default function Navbar({
 
           {dropdownOpen && (
             <div className="absolute right-0 top-full pt-2 w-60 z-50">
-              <div className="bg-black/95 border border-zinc-800 rounded shadow-2xl py-2 text-sm">
+              <div className="bg-[#181818] border border-zinc-800 rounded shadow-2xl py-2 text-sm">
                 <div className="px-3 py-1.5 text-[11px] uppercase tracking-wider text-zinc-500 font-semibold">
                   Switch Profiles
                 </div>
@@ -250,27 +266,42 @@ export default function Navbar({
                   <span>Profile Password & Account</span>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setDropdownOpen(false);
-                    onOpenAdmin("folders");
-                  }}
-                  className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
-                  <FolderSync className="w-4 h-4 text-zinc-400" />
-                  <span>Scan Local Folders</span>
-                </button>
+                {isLocalhost && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        onOpenAdmin("activity");
+                      }}
+                      className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
+                    >
+                      <Activity className="w-4 h-4 text-[#3B82F6]" />
+                      <span>Activity Logs (Admin)</span>
+                    </button>
 
-                <button
-                  onClick={() => {
-                    setDropdownOpen(false);
-                    onOpenAdmin("media");
-                  }}
-                  className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
-                  <PlusCircle className="w-4 h-4 text-zinc-400" />
-                  <span>Edit Library & Posters</span>
-                </button>
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        onOpenAdmin("folders");
+                      }}
+                      className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
+                    >
+                      <FolderSync className="w-4 h-4 text-zinc-400" />
+                      <span>Storage Locations</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        onOpenAdmin("media");
+                      }}
+                      className="w-full px-3 py-2 flex items-center gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
+                    >
+                      <PlusCircle className="w-4 h-4 text-zinc-400" />
+                      <span>Edit Library & Posters</span>
+                    </button>
+                  </>
+                )}
 
                 <button
                   onClick={() => {

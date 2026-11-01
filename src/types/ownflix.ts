@@ -70,6 +70,31 @@ export interface LibraryFolder {
   name: string;
   path: string;
   mediaType: "MOVIE" | "SERIES" | "MIXED";
+  profileId: string | null;
+  profile?: {
+    id: string;
+    name: string;
+    avatarColor: string;
+    avatarIcon: string;
+  } | null;
   lastScannedAt: string | null;
   itemCount: number;
+}
+
+export interface ActivityLogItem {
+  id: string;
+  profileId: string;
+  profile: {
+    id: string;
+    name: string;
+    avatarColor: string;
+    avatarIcon: string;
+    isKids: boolean;
+  };
+  action: string;
+  details: string;
+  mediaItemId: string | null;
+  mediaTitle: string | null;
+  ipAddress: string | null;
+  createdAt: string;
 }
