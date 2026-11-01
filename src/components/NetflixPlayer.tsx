@@ -2636,13 +2636,13 @@ export default function NetflixPlayer({
       {/* Permanent Docked Right Chat Sidebar */}
       <aside
         onClick={(e) => e.stopPropagation()}
-        className="w-80 md:w-88 lg:w-96 h-full bg-[#121212] border-l border-zinc-800 flex flex-col shrink-0 z-30 select-text"
+        className="w-88 md:w-96 lg:w-[420px] h-full bg-[#121212] border-l border-zinc-800 flex flex-col shrink-0 z-30 select-text"
       >
         {/* Sidebar Header */}
-        <div className="px-4 py-3.5 border-b border-zinc-800 bg-[#161616] flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <MessageSquare className="w-4 h-4 text-[#E50914] shrink-0" />
-            <span className="font-bold text-sm text-white truncate">
+        <div className="px-4 py-4 border-b border-zinc-800 bg-[#161616] flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <MessageSquare className="w-5 h-5 text-[#E50914] shrink-0" />
+            <span className="font-bold text-base text-white truncate">
               {room ? `Room #${room.id.toUpperCase()} Chat` : "Live Stream Chat"}
             </span>
           </div>
@@ -2650,17 +2650,17 @@ export default function NetflixPlayer({
           {room ? (
             <button
               onClick={handleCopyShareUrl}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-semibold text-emerald-400 px-2.5 py-1 rounded transition-colors shrink-0"
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-sm font-semibold text-emerald-400 px-3 py-1.5 rounded transition-colors shrink-0"
               title="Copy Watch Together Invite Link"
             >
               {copiedLink ? (
                 <>
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-4 h-4" />
                   <span>Copied</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5" />
+                  <Copy className="w-4 h-4" />
                   <span>Invite</span>
                 </>
               )}
@@ -2669,9 +2669,9 @@ export default function NetflixPlayer({
             <button
               onClick={() => handleCreateRoom("PACE_SYNC")}
               disabled={creatingRoom}
-              className="flex items-center gap-1.5 bg-[#E50914] hover:bg-[#f6121d] text-white text-xs font-bold px-2.5 py-1 rounded transition-colors shrink-0"
+              className="flex items-center gap-1.5 bg-[#E50914] hover:bg-[#f6121d] text-white text-sm font-bold px-3 py-1.5 rounded transition-colors shrink-0"
             >
-              <Users className="w-3.5 h-3.5" />
+              <Users className="w-4 h-4" />
               <span>Start Room</span>
             </button>
           )}
@@ -2679,8 +2679,8 @@ export default function NetflixPlayer({
 
         {/* Active Room Mode & Participants Strip */}
         {room && (
-          <div className="px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
+          <div className="px-4 py-3 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2">
+            <div className="flex items-center justify-between text-xs">
               <span className="text-zinc-400 font-semibold">
                 Mode:{" "}
                 <strong className="text-white">
@@ -2705,21 +2705,21 @@ export default function NetflixPlayer({
               {roomParticipants.map((p) => (
                 <div
                   key={p.participantId}
-                  className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-full pl-1 pr-2 py-0.5 text-[11px] shrink-0"
+                  className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-full pl-1.5 pr-2.5 py-1 text-xs shrink-0"
                   title={`${p.profileName} @ ${formatTime(p.positionSeconds)} (${p.playbackRate}x)`}
                 >
                   <div
-                    className="w-4 h-4 rounded-full flex items-center justify-center"
+                    className="w-5 h-5 rounded-full flex items-center justify-center"
                     style={{
                       background: `linear-gradient(145deg, ${p.avatarColor}, #111111 150%)`,
                     }}
                   >
-                    {renderProfileIcon(p.avatarIcon, "w-2.5 h-2.5 text-white")}
+                    {renderProfileIcon(p.avatarIcon, "w-3 h-3 text-white")}
                   </div>
-                  <span className="text-zinc-200 font-medium max-w-[75px] truncate">
+                  <span className="text-zinc-200 font-medium max-w-[85px] truncate">
                     {p.profileName}
                   </span>
-                  <span className="text-[10px] font-mono text-emerald-400">
+                  <span className="text-xs font-mono text-emerald-400">
                     {p.playbackRate}x
                   </span>
                 </div>
@@ -2731,15 +2731,15 @@ export default function NetflixPlayer({
         {/* Messages Feed */}
         <div
           ref={chatScrollRef}
-          className="flex-1 overflow-y-auto p-3.5 space-y-3"
+          className="flex-1 overflow-y-auto p-4 space-y-4"
         >
           {displayedMessages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4 text-zinc-500">
-              <MessageSquare className="w-8 h-8 mb-2 text-zinc-700" />
-              <p className="text-xs font-medium text-zinc-400 mb-1">
+              <MessageSquare className="w-10 h-10 mb-2.5 text-zinc-700" />
+              <p className="text-sm font-medium text-zinc-400 mb-1">
                 No messages yet
               </p>
-              <p className="text-[11px] text-zinc-500 leading-relaxed">
+              <p className="text-xs text-zinc-500 leading-relaxed">
                 {room
                   ? "Send emojis, react to messages, or share pictures with everyone watching!"
                   : "Send a message, emoji, or picture, or click 'Start Room' above to invite friends."}
@@ -2760,16 +2760,16 @@ export default function NetflixPlayer({
                   key={msg.id}
                   className={`flex flex-col ${
                     isOwn ? "items-end" : "items-start"
-                  } text-xs`}
+                  } text-sm`}
                 >
                   <div
-                    className={`flex items-end gap-2 max-w-[88%] ${
+                    className={`flex items-end gap-2.5 max-w-[90%] ${
                       isOwn ? "flex-row-reverse" : "flex-row"
                     }`}
                   >
                     {/* Profile Avatar (shown on left for other users, right for own) */}
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mb-0.5 shadow"
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-0.5 shadow"
                       style={{
                         background: `linear-gradient(145deg, ${msg.avatarColor}, #111111 150%)`,
                       }}
@@ -2779,7 +2779,7 @@ export default function NetflixPlayer({
 
                     {/* Teams Chat Bubble */}
                     <div
-                      className={`group/msg relative rounded-2xl px-3.5 py-2.5 shadow-md transition-colors border ${
+                      className={`group/msg relative rounded-2xl px-4 py-3 shadow-md transition-colors border ${
                         isOwn
                           ? "bg-[#2b2d42] hover:bg-[#32354d] border-indigo-500/30 rounded-br-sm text-white"
                           : "bg-[#1f1f23] hover:bg-[#26262b] border-zinc-800 rounded-bl-sm text-zinc-100"
@@ -2788,16 +2788,16 @@ export default function NetflixPlayer({
                       {/* Microsoft Teams Floating Hover Reaction & Action Toolbar */}
                       {!isEditing && (
                         <div
-                          className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-3.5 ${
+                          className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-4 ${
                             isOwn ? "right-2" : "left-2"
-                          } z-20 flex items-center gap-0.5 bg-[#1a1a1d] border border-zinc-700 rounded-full px-1.5 py-0.5 shadow-xl`}
+                          } z-20 flex items-center gap-1 bg-[#1a1a1d] border border-zinc-700 rounded-full px-2 py-1 shadow-xl`}
                         >
                           {QUICK_REACTIONS.map((emo) => (
                             <button
                               key={emo}
                               type="button"
                               onClick={() => handleToggleReaction(msg.id, emo)}
-                              className="hover:scale-125 transition-transform px-1 py-0.5 text-xs leading-none"
+                              className="hover:scale-125 transition-transform px-1 py-0.5 text-sm leading-none"
                               title={`React ${emo}`}
                             >
                               {emo}
@@ -2813,11 +2813,11 @@ export default function NetflixPlayer({
                             className="p-1 text-zinc-400 hover:text-white rounded"
                             title="More reactions"
                           >
-                            <Smile className="w-3 h-3" />
+                            <Smile className="w-3.5 h-3.5" />
                           </button>
                           {isOwn && (
                             <>
-                              <div className="w-px h-3.5 bg-zinc-700 mx-0.5" />
+                              <div className="w-px h-4 bg-zinc-700 mx-0.5" />
                               <button
                                 type="button"
                                 onClick={() => {
@@ -2827,7 +2827,7 @@ export default function NetflixPlayer({
                                 className="p-1 text-zinc-400 hover:text-white rounded"
                                 title="Edit message"
                               >
-                                <Pencil className="w-3 h-3" />
+                                <Pencil className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 type="button"
@@ -2835,7 +2835,7 @@ export default function NetflixPlayer({
                                 className="p-1 text-zinc-400 hover:text-red-400 rounded"
                                 title="Delete message"
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </>
                           )}
@@ -2844,23 +2844,23 @@ export default function NetflixPlayer({
 
                       {/* Header Row: Sender Name + Timestamp */}
                       <div
-                        className={`flex items-baseline gap-2 mb-0.5 ${
+                        className={`flex items-baseline gap-2 mb-1 ${
                           isOwn ? "justify-end" : "justify-start"
                         }`}
                       >
-                        <span className="font-bold text-[11px] text-zinc-300 truncate">
+                        <span className="font-bold text-xs text-zinc-300 truncate">
                           {isOwn ? "You" : msg.profileName}
                         </span>
                         <button
                           type="button"
                           onClick={() => seekTo(msg.videoTimestamp)}
-                          className="text-[10px] font-mono text-zinc-400 hover:text-[#E50914] transition-colors"
+                          className="text-xs font-mono text-zinc-400 hover:text-[#E50914] transition-colors"
                           title="Jump to this video timestamp"
                         >
                           {formatTime(msg.videoTimestamp)}
                         </button>
                         {msg.editedAt && (
-                          <span className="text-[10px] text-zinc-400 italic">
+                          <span className="text-xs text-zinc-400 italic">
                             Edited
                           </span>
                         )}
@@ -2869,14 +2869,14 @@ export default function NetflixPlayer({
                       {/* Expanded Reaction Emoji Picker for this Message */}
                       {reactionPickerMsgId === msg.id && (
                         <div className="mt-2 mb-2 bg-[#161618] border border-zinc-700 rounded-xl p-2.5 shadow-2xl z-30 w-64">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                          <div className="flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
                             <span>React with any emoji</span>
                             <button
                               type="button"
                               onClick={() => setReactionPickerMsgId(null)}
                               className="text-zinc-400 hover:text-white"
                             >
-                              <X className="w-3 h-3" />
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
                           <div className="grid grid-cols-7 gap-1 max-h-36 overflow-y-auto pr-1">
@@ -2906,29 +2906,29 @@ export default function NetflixPlayer({
                             e.preventDefault();
                             handleSaveEditMessage(msg.id);
                           }}
-                          className="mt-1.5 space-y-1.5 min-w-[200px]"
+                          className="mt-1.5 space-y-2 min-w-[220px]"
                         >
                           <input
                             type="text"
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
                             autoFocus
-                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-[#E50914] rounded px-2.5 py-1.5 text-xs text-white outline-none"
+                            className="w-full bg-zinc-950 border border-zinc-700 focus:border-[#E50914] rounded px-3 py-2 text-sm text-white outline-none"
                           />
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingMessageId(null);
                                 setEditingText("");
                               }}
-                              className="px-2 py-0.5 text-[11px] text-zinc-400 hover:text-white rounded border border-zinc-700"
+                              className="px-2.5 py-1 text-xs text-zinc-400 hover:text-white rounded border border-zinc-700"
                             >
                               Cancel
                             </button>
                             <button
                               type="submit"
-                              className="px-2.5 py-0.5 text-[11px] bg-[#E50914] hover:bg-[#f6121d] text-white font-semibold rounded"
+                              className="px-3 py-1 text-xs bg-[#E50914] hover:bg-[#f6121d] text-white font-semibold rounded"
                             >
                               Save
                             </button>
@@ -2937,7 +2937,7 @@ export default function NetflixPlayer({
                       ) : (
                         <>
                           {msg.text && (
-                            <p className="text-zinc-100 break-words leading-relaxed whitespace-pre-wrap">
+                            <p className="text-[15px] text-zinc-100 break-words leading-snug whitespace-pre-wrap">
                               {msg.text}
                             </p>
                           )}
@@ -2952,7 +2952,7 @@ export default function NetflixPlayer({
                                 onClick={() =>
                                   setLightboxImage(msg.imageUrl || null)
                                 }
-                                className="max-h-48 w-auto rounded-lg border border-zinc-700/80 object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+                                className="max-h-52 w-auto rounded-lg border border-zinc-700/80 object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
                               />
                             </div>
                           )}
@@ -2964,8 +2964,8 @@ export default function NetflixPlayer({
                   {/* Reactions Pill Row below Bubble */}
                   {reactionEntries.length > 0 && (
                     <div
-                      className={`flex flex-wrap items-center gap-1 mt-1 ${
-                        isOwn ? "pr-9 justify-end" : "pl-9 justify-start"
+                      className={`flex flex-wrap items-center gap-1.5 mt-1.5 ${
+                        isOwn ? "pr-10 justify-end" : "pl-10 justify-start"
                       }`}
                     >
                       {reactionEntries.map(([emo, users]) => {
@@ -2981,7 +2981,7 @@ export default function NetflixPlayer({
                             type="button"
                             onClick={() => handleToggleReaction(msg.id, emo)}
                             title={`Reacted by: ${names}`}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border transition-colors ${
                               hasMine
                                 ? "bg-indigo-500/25 border-indigo-400 text-white font-semibold"
                                 : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-600"
@@ -3005,14 +3005,14 @@ export default function NetflixPlayer({
           {/* Emoji Picker Popover (Full Categorized + Searchable Teams Style) */}
           {showEmojiPicker && (
             <div className="absolute bottom-full left-3 right-3 mb-2 bg-[#1e1e1e] border border-zinc-700 rounded-xl p-3 shadow-2xl z-40 flex flex-col max-h-80">
-              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
+              <div className="flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 <span>Emoji Picker</span>
                 <button
                   type="button"
                   onClick={() => setShowEmojiPicker(false)}
                   className="text-zinc-400 hover:text-white"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
@@ -3022,7 +3022,7 @@ export default function NetflixPlayer({
                 value={emojiSearch}
                 onChange={(e) => setEmojiSearch(e.target.value)}
                 placeholder="Search emojis (e.g. laugh, fire, popcorn, heart)..."
-                className="w-full bg-zinc-900 border border-zinc-700/80 focus:border-[#E50914] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 outline-none mb-2"
+                className="w-full bg-zinc-900 border border-zinc-700/80 focus:border-[#E50914] rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none mb-2"
               />
 
               {/* Category Tabs */}
@@ -3034,7 +3034,7 @@ export default function NetflixPlayer({
                       type="button"
                       onClick={() => setActiveEmojiCategory(cat.id)}
                       title={cat.label}
-                      className={`flex-1 py-1 rounded text-sm transition-colors ${
+                      className={`flex-1 py-1 rounded text-base transition-colors ${
                         activeEmojiCategory === cat.id
                           ? "bg-zinc-800 border-b-2 border-[#E50914]"
                           : "hover:bg-zinc-800/50 opacity-70 hover:opacity-100"
@@ -3078,7 +3078,7 @@ export default function NetflixPlayer({
                       ) || EMOJI_CATEGORIES[0];
                     return (
                       <div>
-                        <div className="text-[10px] font-semibold text-zinc-400 mb-1.5">
+                        <div className="text-xs font-semibold text-zinc-400 mb-1.5">
                           {currentCat.label} ({currentCat.emojis.length})
                         </div>
                         <div className="grid grid-cols-8 gap-1">
@@ -3139,7 +3139,7 @@ export default function NetflixPlayer({
 
           <form
             onSubmit={handleSendChat}
-            className="bg-zinc-900 border border-zinc-700/80 focus-within:border-[#E50914] rounded-xl px-3 py-2 transition-colors"
+            className="bg-zinc-900 border border-zinc-700/80 focus-within:border-[#E50914] rounded-xl px-3.5 py-2.5 transition-colors"
           >
             <input
               type="text"
@@ -3164,7 +3164,7 @@ export default function NetflixPlayer({
                   ? "Type a message or paste a picture..."
                   : "Type a message..."
               }
-              className="w-full bg-transparent text-xs text-white placeholder-zinc-500 outline-none mb-2"
+              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none mb-2"
             />
 
             <div className="flex items-center justify-between pt-1.5 border-t border-zinc-800/80">
@@ -3195,11 +3195,11 @@ export default function NetflixPlayer({
               <button
                 type="submit"
                 disabled={!chatText.trim() && !chatImagePreview}
-                className="px-3 py-1 rounded-md bg-[#E50914] hover:bg-[#f6121d] disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-1.5 rounded-md bg-[#E50914] hover:bg-[#f6121d] disabled:opacity-40 text-white text-sm font-bold flex items-center gap-1.5 transition-colors"
                 title="Send Message"
               >
                 <span>Send</span>
-                <Send className="w-3 h-3" />
+                <Send className="w-3.5 h-3.5" />
               </button>
             </div>
           </form>
