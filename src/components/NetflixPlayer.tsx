@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MediaItem, Episode, Profile } from "@/types/ownflix";
+import { WatchRoom, WatchTogetherMode } from "@/lib/rooms";
+import { renderProfileIcon } from "./ProfileGate";
 import {
   ArrowLeft,
   Play,
@@ -20,6 +22,12 @@ import {
   Sparkles,
   Wifi,
   SlidersHorizontal,
+  Users,
+  Copy,
+  Flag,
+  Zap,
+  Flame,
+  X,
 } from "lucide-react";
 
 interface NetflixPlayerProps {
@@ -27,6 +35,7 @@ interface NetflixPlayerProps {
   initialEpisode?: Episode;
   startFromBeginning?: boolean;
   activeProfile: Profile;
+  initialRoomId?: string | null;
   onClose: () => void;
   onProgressUpdated: () => void;
 }
@@ -95,7 +104,11 @@ function detectInitialAutoQuality(): EffectiveQuality {
   if (typeof navigator !== "undefined" && "connection" in navigator) {
     const conn = (
       navigator as unknown as {
-        connection?: { effectiveType?: string; downlink?: number; saveData?: boolean };
+        connection?: {
+          effectiveType?: string;
+          downlink?: number;
+          saveData?: boolean;
+        };
       }
     ).connection;
     if (conn) {
@@ -171,11 +184,19 @@ function formatTime(sec: number): string {
   return `${mins}:${String(s).padStart(2, "0")}`;
 }
 
+function formatOrdinal(n: number): string {
+  if (n === 1) return "1st";
+  if (n === 2) return "2nd";
+  if (n === 3) return "3rd";
+  return `${n}th`;
+}
+
 export default function NetflixPlayer({
   item,
   initialEpisode,
   startFromBeginning = false,
   activeProfile,
+  initialRoomId = null,
   onClose,
   onProgressUpdated,
 }: NetflixPlayerProps) {
@@ -184,6 +205,13 @@ export default function NetflixPlayer({
   const scrubBarRef = useRef<HTMLDivElement>(null);
   const hideControlsTimer = useRef<NodeJS.Timeout | null>(null);
   const stallCountRef = useRef<number>(0);
+
+  // Unique participant session ID per tab so multiple tabs can join the same room
+  const participantIdRef = useRef<string>(
+    `p-${Math.random().toString(36).slice(2, 9)}`
+  );
+  const isRemoteSyncActionRef = useRef<boolean>(false);
+  const lastAppliedSeekSeqRef = useRef<number>(0);
 
   // Determine active episode if series
   const [currentEpisode, setCurrentEpisode] = useState<Episode | undefined>(
@@ -202,7 +230,14 @@ export default function NetflixPlayer({
     }
   );
 
-  // Quality mode state ("auto" | "original" | "1080p" | "720p" | "480p" | "360p")
+  // Watch Together Room State
+  const [roomId, setRoomId] = useState<string | null>(initialRoomId);
+  const [room, setRoom] = useState<WatchRoom | null>(null);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [creatingRoom, setCreatingRoom] = useState(false);
+
+  // Quality mode state
   const [qualityMode, setQualityMode] = useState<StreamQualityMode>(() => {
     if (typeof window !== "undefined") {
       const saved = window.localStorage.getItem(
@@ -228,7 +263,6 @@ export default function NetflixPlayer({
     activeFilePath && /\.(mkv|avi|ts)$/i.test(activeFilePath)
   );
 
-  // Whenever quality !== "original", or when playing MKV/AVI/TS, FFmpeg pipes the stream
   const isPipedStream = isContainerPiped || effectiveQuality !== "original";
 
   // Known duration from FFprobe in DB
@@ -241,7 +275,12 @@ export default function NetflixPlayer({
 
   // Initial resume timestamp
   const initialResumeSeconds = useMemo(() => {
-    if (startFromBeginning || !item.progress || item.progress.completed) {
+    if (
+      initialRoomId ||
+      startFromBeginning ||
+      !item.progress ||
+      item.progress.completed
+    ) {
       return 0;
     }
     const sameEp =
@@ -250,9 +289,8 @@ export default function NetflixPlayer({
       return Math.floor(item.progress.positionSeconds);
     }
     return 0;
-  }, [startFromBeginning, item.progress, currentEpisode]);
+  }, [initialRoomId, startFromBeginning, item.progress, currentEpisode]);
 
-  // For piped FFmpeg streams (MKV/AVI/Transcode), streamOffset tracks the server-side -ss seek start
   const [streamOffset, setStreamOffset] = useState<number>(() =>
     isPipedStream ? initialResumeSeconds : 0
   );
@@ -272,14 +310,13 @@ export default function NetflixPlayer({
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPreviewTime, setScrubPreviewTime] = useState<number | null>(null);
 
-  // Keep duration synced when switching episodes or items
   useEffect(() => {
     setDuration(knownDuration);
   }, [knownDuration]);
 
-  // Popovers: "none" | "audioSub" | "speed" | "episodes" | "quality"
+  // Popovers: "none" | "audioSub" | "speed" | "episodes" | "quality" | "room"
   const [activePopover, setActivePopover] = useState<
-    "none" | "audioSub" | "speed" | "episodes" | "quality"
+    "none" | "audioSub" | "speed" | "episodes" | "quality" | "room"
   >("none");
 
   const audioOptions = useMemo(
@@ -330,7 +367,6 @@ export default function NetflixPlayer({
       ? apiBase
       : item.videoUrl || "";
 
-    // If user selected a lower quality transcode preset, route even remote streams through /api/stream
     const base =
       effectiveQuality !== "original" && !directUrl.startsWith("/api/stream")
         ? apiBase
@@ -350,6 +386,273 @@ export default function NetflixPlayer({
     }
     return params.length > 0 ? `${base}&${params.join("&")}` : base;
   }, [currentEpisode, item, effectiveQuality, isPipedStream, streamOffset]);
+
+  // Unified seek function
+  const seekTo = useCallback(
+    (targetSec: number, broadcastToRoom = true) => {
+      const clamped = Math.max(
+        0,
+        Math.min(duration || knownDuration, targetSec)
+      );
+      const v = videoRef.current;
+
+      if (isPipedStream) {
+        const relTarget = clamped - streamOffset;
+        if (v && relTarget >= 0 && relTarget <= bufferedEnd - 0.5) {
+          v.currentTime = relTarget;
+          setCurrentTime(clamped);
+        } else {
+          setBufferedEnd(0);
+          setStreamOffset(Math.floor(clamped));
+          setCurrentTime(clamped);
+        }
+      } else {
+        if (v) {
+          v.currentTime = clamped;
+        }
+        setCurrentTime(clamped);
+      }
+
+      if (broadcastToRoom && roomId && room?.mode === "ALL_PAUSE") {
+        fetch("/api/rooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "seek",
+            roomId,
+            seekTime: clamped,
+            participant: {
+              participantId: participantIdRef.current,
+              profileId: activeProfile.id,
+              profileName: activeProfile.name,
+              avatarColor: activeProfile.avatarColor,
+              avatarIcon: activeProfile.avatarIcon,
+              positionSeconds: clamped,
+              durationSeconds: duration || knownDuration,
+              isPaused: !isPlaying,
+              isBuffering,
+            },
+          }),
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.room) {
+              lastAppliedSeekSeqRef.current = d.room.lastSeekSeq;
+              setRoom(d.room);
+            }
+          })
+          .catch(() => {});
+      }
+    },
+    [
+      duration,
+      knownDuration,
+      isPipedStream,
+      streamOffset,
+      bufferedEnd,
+      roomId,
+      room?.mode,
+      activeProfile,
+      isPlaying,
+      isBuffering,
+    ]
+  );
+
+  // Create Watch Together Room
+  const handleCreateRoom = async (initialMode: WatchTogetherMode = "MARIO_KART") => {
+    setCreatingRoom(true);
+    try {
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          mediaItemId: item.id,
+          episodeId: currentEpisode?.id || null,
+          mode: initialMode,
+          participant: {
+            participantId: participantIdRef.current,
+            profileId: activeProfile.id,
+            profileName: activeProfile.name,
+            avatarColor: activeProfile.avatarColor,
+            avatarIcon: activeProfile.avatarIcon,
+            positionSeconds: currentTime,
+            durationSeconds: duration || knownDuration,
+            isPaused: !isPlaying,
+            isBuffering,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.room) {
+        setRoomId(data.room.id);
+        setRoom(data.room);
+        lastAppliedSeekSeqRef.current = data.room.lastSeekSeq || 0;
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("room", data.room.id);
+          window.history.replaceState({}, "", url.toString());
+        }
+      }
+    } finally {
+      setCreatingRoom(false);
+    }
+  };
+
+  // Switch Watch Together Room Mode ("ALL_PAUSE" vs "MARIO_KART")
+  const handleSetRoomMode = async (newMode: WatchTogetherMode) => {
+    if (!roomId) return;
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "setMode",
+        roomId,
+        mode: newMode,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data.room) {
+      setRoom(data.room);
+    }
+  };
+
+  // Leave Watch Together Room
+  const handleLeaveRoom = async () => {
+    const activeId = roomId;
+    setRoomId(null);
+    setRoom(null);
+    setPlaybackSpeed(1);
+    if (videoRef.current) videoRef.current.playbackRate = 1;
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("room");
+      window.history.replaceState({}, "", url.toString());
+    }
+    if (activeId) {
+      await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "leave",
+          roomId: activeId,
+          participant: { participantId: participantIdRef.current },
+        }),
+      }).catch(() => {});
+    }
+  };
+
+  // Copy Share URL helper
+  const handleCopyShareUrl = () => {
+    if (!roomId || typeof window === "undefined") return;
+    const shareUrl = `${window.location.origin}/?room=${roomId}`;
+    navigator.clipboard.writeText(shareUrl).catch(() => {});
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  // Real-time Watch Together Room Heartbeat & Sync Loop (every 800ms)
+  useEffect(() => {
+    if (!roomId) return;
+
+    let cancelled = false;
+
+    const syncTick = async () => {
+      const v = videoRef.current;
+      const pos = v
+        ? isPipedStream
+          ? streamOffset + v.currentTime
+          : v.currentTime
+        : currentTime;
+
+      try {
+        const res = await fetch("/api/rooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "heartbeat",
+            roomId,
+            participant: {
+              participantId: participantIdRef.current,
+              profileId: activeProfile.id,
+              profileName: activeProfile.name,
+              avatarColor: activeProfile.avatarColor,
+              avatarIcon: activeProfile.avatarIcon,
+              positionSeconds: pos,
+              durationSeconds: duration || knownDuration,
+              isPaused: v ? v.paused : !isPlaying,
+              isBuffering,
+            },
+          }),
+        });
+
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const updatedRoom: WatchRoom = data.room;
+        if (!updatedRoom || cancelled) return;
+
+        setRoom(updatedRoom);
+
+        // Apply Mode 1 (ALL_PAUSE) synchronization
+        if (updatedRoom.mode === "ALL_PAUSE") {
+          // 1. Sync shared seek events
+          if (updatedRoom.lastSeekSeq > lastAppliedSeekSeqRef.current) {
+            lastAppliedSeekSeqRef.current = updatedRoom.lastSeekSeq;
+            if (Math.abs(pos - updatedRoom.lastSeekTime) > 2.5) {
+              seekTo(updatedRoom.lastSeekTime, false);
+            }
+          }
+
+          // 2. Pause everyone if anyone paused or is buffering
+          const shouldPause =
+            !updatedRoom.isPlaying || Boolean(updatedRoom.bufferingProfileName);
+          if (v) {
+            if (v.playbackRate !== 1) {
+              v.playbackRate = 1;
+              setPlaybackSpeed(1);
+            }
+            if (shouldPause && !v.paused) {
+              isRemoteSyncActionRef.current = true;
+              v.pause();
+              setIsPlaying(false);
+            } else if (!shouldPause && v.paused) {
+              isRemoteSyncActionRef.current = true;
+              v.play().catch(() => {});
+              setIsPlaying(true);
+            }
+          }
+        } else if (updatedRoom.mode === "MARIO_KART") {
+          // Mode 2 (MARIO_KART): Apply rubber-band playback speed (1.25x default, 1.4x catch-up, 1.0x leader slow-down)
+          const me = updatedRoom.participants[participantIdRef.current];
+          const targetSpeed = me?.playbackRate || 1.25;
+          if (v && Math.abs(v.playbackRate - targetSpeed) > 0.01) {
+            v.playbackRate = targetSpeed;
+            setPlaybackSpeed(targetSpeed);
+          }
+        }
+      } catch {
+        // Ignore transient poll errors
+      }
+    };
+
+    syncTick();
+    const timer = setInterval(syncTick, 800);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [
+    roomId,
+    activeProfile,
+    currentTime,
+    duration,
+    knownDuration,
+    isPlaying,
+    isBuffering,
+    isPipedStream,
+    streamOffset,
+    seekTo,
+  ]);
 
   // Switch quality mode while preserving exact playback timestamp
   const handleSelectQuality = useCallback(
@@ -381,6 +684,7 @@ export default function NetflixPlayer({
 
   // Auto-Adaptive step-down if video stalls repeatedly on a slow connection
   const handleVideoWaiting = useCallback(() => {
+    setIsBuffering(true);
     if (qualityMode !== "auto") return;
     stallCountRef.current += 1;
     if (stallCountRef.current < 2) return;
@@ -417,7 +721,7 @@ export default function NetflixPlayer({
     ? currentEpisode.creditsStart ?? Math.max(duration - 8, 10)
     : item.creditsStart ?? Math.max(duration - 35, 30);
 
-  // Next episode in series (if applicable)
+  // Next episode in series
   const nextEpisode = useMemo(() => {
     if (item.type !== "SERIES" || !currentEpisode) return undefined;
     const idx = item.episodes.findIndex((e) => e.id === currentEpisode.id);
@@ -427,7 +731,7 @@ export default function NetflixPlayer({
     return undefined;
   }, [item, currentEpisode]);
 
-  // Load WebVTT captions when subtitle language changes
+  // Load WebVTT captions
   useEffect(() => {
     if (selectedSubtitle === "Off") {
       setCues([]);
@@ -474,39 +778,10 @@ export default function NetflixPlayer({
           }),
         });
       } catch {
-        // Ignore network errors during background progress ping
+        // Ignore
       }
     },
     [activeProfile.id, item.id, currentEpisode?.id, duration, knownDuration]
-  );
-
-  // Unified seek function that works for both HTTP 206 Range streams AND live FFmpeg streams
-  const seekTo = useCallback(
-    (targetSec: number) => {
-      const clamped = Math.max(
-        0,
-        Math.min(duration || knownDuration, targetSec)
-      );
-      const v = videoRef.current;
-
-      if (isPipedStream) {
-        const relTarget = clamped - streamOffset;
-        if (v && relTarget >= 0 && relTarget <= bufferedEnd - 0.5) {
-          v.currentTime = relTarget;
-          setCurrentTime(clamped);
-        } else {
-          setBufferedEnd(0);
-          setStreamOffset(Math.floor(clamped));
-          setCurrentTime(clamped);
-        }
-      } else {
-        if (v) {
-          v.currentTime = clamped;
-        }
-        setCurrentTime(clamped);
-      }
-    },
-    [duration, knownDuration, isPipedStream, streamOffset, bufferedEnd]
   );
 
   const seekBy = useCallback(
@@ -516,7 +791,6 @@ export default function NetflixPlayer({
     [currentTime, seekTo]
   );
 
-  // Set initial resume position when video metadata loads
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -532,7 +806,12 @@ export default function NetflixPlayer({
       setDuration(knownDuration);
     }
 
-    v.playbackRate = playbackSpeed;
+    const initialRate =
+      room?.mode === "MARIO_KART"
+        ? room.participants[participantIdRef.current]?.playbackRate || 1.25
+        : playbackSpeed;
+    v.playbackRate = initialRate;
+    setPlaybackSpeed(initialRate);
     v.volume = volume;
     v.muted = isMuted;
 
@@ -559,7 +838,6 @@ export default function NetflixPlayer({
     return () => clearInterval(interval);
   }, [saveProgress, duration, knownDuration, isPipedStream, streamOffset]);
 
-  // Auto-hide HUD controls after 3s of mouse inactivity
   const revealControls = useCallback(() => {
     setShowControls(true);
     if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
@@ -580,18 +858,84 @@ export default function NetflixPlayer({
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
+    const realTime = isPipedStream
+      ? streamOffset + v.currentTime
+      : v.currentTime;
+
     if (v.paused) {
       v.play().catch(() => {});
       setIsPlaying(true);
+      if (roomId && room?.mode === "ALL_PAUSE") {
+        fetch("/api/rooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "play",
+            roomId,
+            participant: {
+              participantId: participantIdRef.current,
+              profileId: activeProfile.id,
+              profileName: activeProfile.name,
+              avatarColor: activeProfile.avatarColor,
+              avatarIcon: activeProfile.avatarIcon,
+              positionSeconds: realTime,
+              durationSeconds: duration || knownDuration,
+              isPaused: false,
+              isBuffering: false,
+            },
+          }),
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.room) setRoom(d.room);
+          })
+          .catch(() => {});
+      }
     } else {
       v.pause();
       setIsPlaying(false);
-      const realTime = isPipedStream
-        ? streamOffset + v.currentTime
-        : v.currentTime;
       saveProgress(realTime, duration || knownDuration);
+      if (roomId && room?.mode === "ALL_PAUSE") {
+        fetch("/api/rooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "pause",
+            roomId,
+            participant: {
+              participantId: participantIdRef.current,
+              profileId: activeProfile.id,
+              profileName: activeProfile.name,
+              avatarColor: activeProfile.avatarColor,
+              avatarIcon: activeProfile.avatarIcon,
+              positionSeconds: realTime,
+              durationSeconds: duration || knownDuration,
+              isPaused: true,
+              isBuffering,
+            },
+          }),
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.room) {
+              lastAppliedSeekSeqRef.current = d.room.lastSeekSeq;
+              setRoom(d.room);
+            }
+          })
+          .catch(() => {});
+      }
     }
-  }, [saveProgress, duration, knownDuration, isPipedStream, streamOffset]);
+  }, [
+    saveProgress,
+    duration,
+    knownDuration,
+    isPipedStream,
+    streamOffset,
+    roomId,
+    room?.mode,
+    activeProfile,
+    isBuffering,
+  ]);
 
   const handleSkipIntro = useCallback(() => {
     seekTo(introEnd);
@@ -608,7 +952,7 @@ export default function NetflixPlayer({
     setActivePopover("none");
   }, []);
 
-  // Mouse drag scrubbing support across the document
+  // Mouse drag scrubbing support
   useEffect(() => {
     if (!isScrubbing) return;
 
@@ -647,7 +991,7 @@ export default function NetflixPlayer({
     };
   }, [isScrubbing, duration, knownDuration, seekTo]);
 
-  // Next Episode Countdown trigger when reaching creditsStart
+  // Next Episode Countdown trigger
   const inCreditsWindow =
     Boolean(nextEpisode) &&
     !creditsDismissed &&
@@ -738,6 +1082,9 @@ export default function NetflixPlayer({
   ]);
 
   const handleExit = async () => {
+    if (roomId) {
+      await handleLeaveRoom();
+    }
     if (currentTime > 1) {
       await saveProgress(currentTime, duration || knownDuration);
     }
@@ -792,6 +1139,13 @@ export default function NetflixPlayer({
         : "Direct Play"
       : `${effectiveQuality} Transcode`;
 
+  const roomParticipants = useMemo(() => {
+    if (!room) return [];
+    return Object.values(room.participants).sort((a, b) => a.rank - b.rank);
+  }, [room]);
+
+  const myParticipant = room?.participants[participantIdRef.current];
+
   return (
     <div
       ref={containerRef}
@@ -812,6 +1166,8 @@ export default function NetflixPlayer({
         }}
         onLoadedMetadata={handleLoadedMetadata}
         onWaiting={handleVideoWaiting}
+        onPlaying={() => setIsBuffering(false)}
+        onCanPlay={() => setIsBuffering(false)}
         onTimeUpdate={(e) => {
           if (isScrubbing) return;
           const v = e.currentTarget;
@@ -823,8 +1179,19 @@ export default function NetflixPlayer({
             setBufferedEnd(v.buffered.end(v.buffered.length - 1));
           }
         }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPlay={() => {
+          setIsPlaying(true);
+          setIsBuffering(false);
+          if (isRemoteSyncActionRef.current) {
+            isRemoteSyncActionRef.current = false;
+          }
+        }}
+        onPause={() => {
+          setIsPlaying(false);
+          if (isRemoteSyncActionRef.current) {
+            isRemoteSyncActionRef.current = false;
+          }
+        }}
         onEnded={() => {
           if (isPipedStream && currentTime < duration - 15) {
             return;
@@ -866,8 +1233,30 @@ export default function NetflixPlayer({
           </div>
         </button>
 
-        {/* Right Top: Stream Quality & Bandwidth Badge */}
-        <div className="flex items-center gap-3">
+        {/* Right Top: Watch Together Button & Stream Quality Badge */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Watch Together Button */}
+          <button
+            onClick={() =>
+              setActivePopover((p) => (p === "room" ? "none" : "room"))
+            }
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors ${
+              room
+                ? "bg-emerald-600 border-emerald-500 text-white shadow-lg"
+                : "bg-zinc-800/85 hover:bg-zinc-700 border-zinc-600 text-zinc-100"
+            }`}
+            title="Watch Together Room"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>
+              {room
+                ? `Room #${room.id.toUpperCase()} (${
+                    roomParticipants.length
+                  } watching)`
+                : "Watch Together"}
+            </span>
+          </button>
+
           <button
             onClick={() =>
               setActivePopover((p) => (p === "quality" ? "none" : "quality"))
@@ -880,13 +1269,14 @@ export default function NetflixPlayer({
             title="Change Transcoding Quality for Slower Connections"
           >
             <Wifi className="w-3.5 h-3.5" />
-            <span>Quality: {qualityBadgeLabel}</span>
+            <span className="hidden sm:inline">Quality:</span>
+            <span>{qualityBadgeLabel}</span>
           </button>
 
           {!showSkipIntroButton && currentTime < introEnd && (
             <button
               onClick={handleSkipIntro}
-              className="hidden sm:flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 text-xs text-zinc-200 px-3 py-1.5 rounded transition-colors"
+              className="hidden md:flex items-center gap-1.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-600 text-xs text-zinc-200 px-3 py-1.5 rounded transition-colors"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#E50914]" />
               <span>Jump Intro</span>
@@ -894,6 +1284,48 @@ export default function NetflixPlayer({
           )}
         </div>
       </div>
+
+      {/* Watch Together Status Banner (All-Pause or Mario Kart Speed Status) */}
+      {room && (
+        <div className="relative z-20 mx-auto px-4 pointer-events-none">
+          {room.mode === "ALL_PAUSE" &&
+            (!room.isPlaying || room.bufferingProfileName) && (
+              <div className="bg-black/85 border border-amber-500/70 text-amber-200 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full shadow-2xl flex items-center gap-2">
+                <Pause className="w-4 h-4 text-amber-400 fill-amber-400" />
+                <span>
+                  {room.bufferingProfileName
+                    ? `All Paused: Waiting for ${room.bufferingProfileName} (buffering)...`
+                    : `All Paused by ${room.pausedByProfileName || "viewer"}`}
+                </span>
+              </div>
+            )}
+
+          {room.mode === "MARIO_KART" && myParticipant && (
+            <div className="bg-black/80 border border-zinc-700/80 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-xl flex items-center gap-3">
+              <span className="text-amber-400 flex items-center gap-1">
+                <Flag className="w-3.5 h-3.5" />
+                {formatOrdinal(myParticipant.rank)} Place
+              </span>
+              <span className="text-zinc-600">•</span>
+              {myParticipant.playbackRate > 1.3 ? (
+                <span className="text-[#E50914] flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 fill-[#E50914]" />
+                  1.4x Catch-Up Boost!
+                </span>
+              ) : myParticipant.playbackRate < 1.1 ? (
+                <span className="text-sky-400 flex items-center gap-1">
+                  1.0x Leader Slowdown (Waiting for pack)
+                </span>
+              ) : (
+                <span className="text-emerald-400 flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 fill-emerald-400" />
+                  1.25x Mario Kart Cruise
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Auto-Adaptive Slow Connection Toast */}
       {adaptiveBanner && (
@@ -905,7 +1337,7 @@ export default function NetflixPlayer({
 
       {/* Active Subtitle Overlay */}
       {activeCue && (
-        <div className="relative z-10 mt-auto mb-28 px-6 text-center pointer-events-none">
+        <div className="relative z-10 mt-auto mb-32 px-6 text-center pointer-events-none">
           <span className="inline-block bg-black/75 text-white text-base sm:text-xl md:text-2xl font-medium px-4 py-1.5 rounded shadow-lg whitespace-pre-line leading-snug">
             {activeCue.text}
           </span>
@@ -914,7 +1346,7 @@ export default function NetflixPlayer({
 
       {/* Floating Netflix "Skip Intro" Button */}
       {showSkipIntroButton && (
-        <div className="absolute right-8 md:right-12 bottom-28 z-30">
+        <div className="absolute right-8 md:right-12 bottom-36 z-30">
           <button
             onClick={handleSkipIntro}
             className="bg-white/95 hover:bg-white text-black font-bold text-sm md:text-base px-6 py-2.5 rounded shadow-2xl border-2 border-white flex items-center gap-2 transition-transform hover:scale-105"
@@ -927,7 +1359,7 @@ export default function NetflixPlayer({
 
       {/* Floating Netflix "Next Episode" Countdown Overlay */}
       {inCreditsWindow && nextEpisode && (
-        <div className="absolute right-8 md:right-12 bottom-28 z-30 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 md:w-96 backdrop-blur-md">
+        <div className="absolute right-8 md:right-12 bottom-36 z-30 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 md:w-96 backdrop-blur-md">
           <div className="text-xs uppercase tracking-wider text-zinc-400 font-bold mb-1">
             Up Next in {nextCountdown ?? 5}s
           </div>
@@ -953,11 +1385,242 @@ export default function NetflixPlayer({
         </div>
       )}
 
-      {/* Popovers (Quality/Bandwidth, Audio/Subtitles, Playback Speed, Episodes List) */}
+      {/* Watch Together Room Popover */}
+      {activePopover === "room" && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-6 md:right-12 top-20 z-40 bg-[#181818]/95 border border-zinc-700 rounded-xl p-5 shadow-2xl w-[350px] sm:w-[430px] backdrop-blur-md"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#E50914]" />
+              <h3 className="font-bold text-base text-white">
+                Watch Together Room
+              </h3>
+            </div>
+            <button
+              onClick={() => setActivePopover("none")}
+              className="text-zinc-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {!room ? (
+            <div className="space-y-4">
+              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                Start a Watch Together room and share the invite URL with
+                friends. Choose between synchronized pause mode or Mario Kart
+                catch-up speed mode with a live avatar minimap!
+              </p>
+
+              <div className="grid grid-cols-1 gap-2.5">
+                <button
+                  onClick={() => handleCreateRoom("MARIO_KART")}
+                  disabled={creatingRoom}
+                  className="w-full p-3 rounded-lg bg-[#E50914] hover:bg-[#f6121d] text-white text-left transition-colors"
+                >
+                  <div className="font-bold text-sm flex items-center gap-2">
+                    <Flame className="w-4 h-4 fill-white" />
+                    <span>Start Mario Kart Speed Room (1.25x / 1.4x / 1.0x)</span>
+                  </div>
+                  <p className="text-xs text-white/85 mt-0.5">
+                    Default 1.25x • Slow users boost to 1.4x • Fastest slows to
+                    1.0x + Live Avatar Minimap
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => handleCreateRoom("ALL_PAUSE")}
+                  disabled={creatingRoom}
+                  className="w-full p-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white text-left transition-colors"
+                >
+                  <div className="font-bold text-sm flex items-center gap-2">
+                    <Pause className="w-4 h-4" />
+                    <span>Start All-Pause Sync Room</span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Everyone pauses automatically when any viewer pauses or
+                    buffers
+                  </p>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Share URL Box */}
+              <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-3">
+                <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+                  <span>Share Invite URL</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    Room #{room.id.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      typeof window !== "undefined"
+                        ? `${window.location.origin}/?room=${room.id}`
+                        : `/?room=${room.id}`
+                    }
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-200 font-mono outline-none"
+                  />
+                  <button
+                    onClick={handleCopyShareUrl}
+                    className="bg-white hover:bg-zinc-200 text-black font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1.5 shrink-0"
+                  >
+                    {copiedLink ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy URL</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mode Switcher */}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                  Watch Together Mode
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleSetRoomMode("ALL_PAUSE")}
+                    className={`p-2.5 rounded-lg border text-left transition-colors ${
+                      room.mode === "ALL_PAUSE"
+                        ? "bg-zinc-800 border-[#E50914] text-white"
+                        : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <Pause className="w-3.5 h-3.5 text-[#E50914]" />
+                      <span>All-Pause Sync</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">
+                      All pause when one pauses or buffers
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => handleSetRoomMode("MARIO_KART")}
+                    className={`p-2.5 rounded-lg border text-left transition-colors ${
+                      room.mode === "MARIO_KART"
+                        ? "bg-zinc-800 border-[#E50914] text-white"
+                        : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Mario Kart Speed</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">
+                      1.25x default • 1.4x catch-up • 1.0x leader
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Viewers in Room */}
+              <div>
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                  <span>Racers / Viewers ({roomParticipants.length})</span>
+                  {room.mode === "MARIO_KART" && (
+                    <button
+                      onClick={() => seekBy(-15)}
+                      className="text-[11px] text-amber-400 hover:underline font-normal normal-case"
+                      title="Jump back 15s to test 1.4x catch-up boost"
+                    >
+                      Test -15s Lag Boost
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {roomParticipants.map((p) => {
+                    const isMe = p.participantId === participantIdRef.current;
+                    return (
+                      <div
+                        key={p.participantId}
+                        className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-lg px-3 py-2 text-xs"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="font-black text-amber-400 w-6">
+                            {formatOrdinal(p.rank)}
+                          </span>
+                          <div
+                            className="w-6 h-6 rounded flex items-center justify-center shrink-0"
+                            style={{
+                              background: `linear-gradient(145deg, ${p.avatarColor}, #111111 150%)`,
+                            }}
+                          >
+                            {renderProfileIcon(
+                              p.avatarIcon,
+                              "w-3.5 h-3.5 text-white"
+                            )}
+                          </div>
+                          <span className="font-bold text-white truncate">
+                            {p.profileName}
+                            {isMe ? " (You)" : ""}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono text-zinc-400">
+                            {formatTime(p.positionSeconds)}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${
+                              p.isBuffering
+                                ? "bg-amber-950 text-amber-300"
+                                : p.isPaused
+                                ? "bg-zinc-800 text-zinc-400"
+                                : p.playbackRate > 1.3
+                                ? "bg-red-950 text-red-300 border border-red-700/50"
+                                : p.playbackRate < 1.1 &&
+                                  room.mode === "MARIO_KART"
+                                ? "bg-sky-950 text-sky-300 border border-sky-700/50"
+                                : "bg-emerald-950 text-emerald-300"
+                            }`}
+                          >
+                            {p.isBuffering
+                              ? "BUFFER"
+                              : p.isPaused
+                              ? "PAUSED"
+                              : `${p.playbackRate}x`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-zinc-800 flex justify-end">
+                <button
+                  onClick={handleLeaveRoom}
+                  className="text-xs text-red-400 hover:text-red-300 font-semibold px-3 py-1.5"
+                >
+                  Leave Watch Room
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Other Popovers (Quality/Bandwidth, Audio/Subtitles, Playback Speed, Episodes List) */}
       {activePopover === "quality" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 backdrop-blur-md"
         >
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -1003,7 +1666,7 @@ export default function NetflixPlayer({
       {activePopover === "audioSub" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-5 shadow-2xl w-[340px] sm:w-[440px] grid grid-cols-2 gap-6 backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-5 shadow-2xl w-[340px] sm:w-[440px] grid grid-cols-2 gap-6 backdrop-blur-md"
         >
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
@@ -1062,13 +1725,13 @@ export default function NetflixPlayer({
       {activePopover === "speed" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-56 backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-56 backdrop-blur-md"
         >
           <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
             Playback Speed
           </h4>
           <div className="space-y-1">
-            {[0.5, 0.75, 1, 1.25, 1.5, 2].map((spd) => (
+            {[0.5, 0.75, 1, 1.25, 1.4, 1.5, 2].map((spd) => (
               <button
                 key={spd}
                 onClick={() => {
@@ -1077,13 +1740,15 @@ export default function NetflixPlayer({
                   setActivePopover("none");
                 }}
                 className={`w-full text-left text-sm py-1.5 px-2.5 rounded flex items-center justify-between ${
-                  playbackSpeed === spd
+                  Math.abs(playbackSpeed - spd) < 0.02
                     ? "text-white font-bold bg-zinc-800"
                     : "text-zinc-400 hover:text-white"
                 }`}
               >
                 <span>{spd === 1 ? "1x (Normal)" : `${spd}x`}</span>
-                {playbackSpeed === spd && <Check className="w-4 h-4" />}
+                {Math.abs(playbackSpeed - spd) < 0.02 && (
+                  <Check className="w-4 h-4" />
+                )}
               </button>
             ))}
           </div>
@@ -1093,7 +1758,7 @@ export default function NetflixPlayer({
       {activePopover === "episodes" && item.type === "SERIES" && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-6 md:right-12 bottom-24 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 max-h-[380px] overflow-y-auto backdrop-blur-md"
+          className="absolute right-6 md:right-12 bottom-28 z-40 bg-[#181818]/95 border border-zinc-700 rounded-lg p-4 shadow-2xl w-80 sm:w-96 max-h-[380px] overflow-y-auto backdrop-blur-md"
         >
           <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
             {item.title} • Episodes
@@ -1134,12 +1799,110 @@ export default function NetflixPlayer({
         </div>
       )}
 
-      {/* Bottom Controls Bar */}
+      {/* Bottom Controls Bar + Mario Kart Minimap */}
       <div
-        className={`relative z-20 px-6 md:px-10 pb-6 pt-10 bg-gradient-to-t from-black/90 via-black/60 to-transparent transition-opacity duration-300 ${
+        className={`relative z-20 px-6 md:px-10 pb-6 pt-12 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-300 ${
           showControls ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
+        {/* MARIO KART AVATAR PROGRESS MINIMAP (Visible when in a Watch Together Room) */}
+        {room && (
+          <div className="mb-5 bg-zinc-900/90 border border-zinc-700/80 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-3">
+              <div className="flex items-center gap-2">
+                <Flag className="w-3.5 h-3.5 text-[#E50914]" />
+                <span className="text-zinc-200">
+                  Watch Together Minimap •{" "}
+                  {room.mode === "MARIO_KART"
+                    ? "Mario Kart Catch-Up (1.25x / 1.4x / 1.0x)"
+                    : "All-Pause Sync"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCopyShareUrl}
+                  className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>{copiedLink ? "Link Copied!" : `Room #${room.id.toUpperCase()}`}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Race Track Bar */}
+            <div className="relative h-8 bg-zinc-950 border border-zinc-800 rounded-full flex items-center px-3 overflow-visible">
+              {/* Dashed center road line */}
+              <div className="w-full border-t-2 border-dashed border-zinc-700/70" />
+
+              {/* Finish Line Checkered Flag on the right */}
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-zinc-500">
+                <Flag className="w-4 h-4 text-white" />
+              </div>
+
+              {/* Participant Avatar Karts along the track */}
+              {roomParticipants.map((p) => {
+                const dur = duration || knownDuration || 600;
+                const pct = Math.min(
+                  96,
+                  Math.max(2, (p.positionSeconds / dur) * 100)
+                );
+                const isMe = p.participantId === participantIdRef.current;
+
+                return (
+                  <div
+                    key={p.participantId}
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-500 flex flex-col items-center"
+                    style={{
+                      left: `${pct}%`,
+                      zIndex: isMe ? 30 : 20 - p.rank,
+                    }}
+                  >
+                    {/* Floating Name + Speed Badge above Avatar */}
+                    <div className="mb-1 px-1.5 py-0.5 rounded bg-black/90 border border-zinc-700 text-[10px] font-bold whitespace-nowrap flex items-center gap-1 shadow-md -mt-8">
+                      <span className="text-amber-400">
+                        {formatOrdinal(p.rank)}
+                      </span>
+                      <span className="text-white">{p.profileName}</span>
+                      <span
+                        className={
+                          p.playbackRate > 1.3
+                            ? "text-[#E50914]"
+                            : p.playbackRate < 1.1 && room.mode === "MARIO_KART"
+                            ? "text-sky-400"
+                            : "text-emerald-400"
+                        }
+                      >
+                        {p.isBuffering
+                          ? "⏳"
+                          : p.isPaused
+                          ? "⏸"
+                          : `${p.playbackRate}x`}
+                      </span>
+                    </div>
+
+                    {/* Profile Avatar Kart Token */}
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform ${
+                        isMe
+                          ? "ring-2 ring-white scale-110"
+                          : "ring-1 ring-zinc-400"
+                      } ${p.playbackRate > 1.3 ? "animate-pulse" : ""}`}
+                      style={{
+                        background: `linear-gradient(145deg, ${p.avatarColor}, #111111 150%)`,
+                      }}
+                      title={`${p.profileName} (${formatTime(
+                        p.positionSeconds
+                      )} @ ${p.playbackRate}x)`}
+                    >
+                      {renderProfileIcon(p.avatarIcon, "w-4 h-4 text-white")}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Netflix Red Timeline Scrubber */}
         <div className="flex items-center gap-4 mb-4">
           <div
@@ -1184,17 +1947,14 @@ export default function NetflixPlayer({
 
             {/* Track Background */}
             <div className="relative w-full h-1.5 group-hover/scrub:h-2.5 bg-zinc-700/80 rounded-full transition-all overflow-visible">
-              {/* Buffered Bar */}
               <div
                 className="absolute inset-y-0 left-0 bg-zinc-500/60 rounded-full"
                 style={{ width: `${bufferedPercent}%` }}
               />
-              {/* Played Red Bar */}
               <div
                 className="absolute inset-y-0 left-0 bg-[#E50914] rounded-full"
                 style={{ width: `${progressPercent}%` }}
               />
-              {/* Scrubber Thumb */}
               <div
                 className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#E50914] shadow-lg transition-transform ${
                   isScrubbing
@@ -1321,6 +2081,20 @@ export default function NetflixPlayer({
                 <Layers className="w-6 h-6" />
               </button>
             )}
+
+            <button
+              onClick={() =>
+                setActivePopover((p) => (p === "room" ? "none" : "room"))
+              }
+              className={`hover:text-white transition-colors flex items-center gap-1 ${
+                activePopover === "room" || room
+                  ? "text-emerald-400"
+                  : "text-white"
+              }`}
+              title="Watch Together Room"
+            >
+              <Users className="w-6 h-6" />
+            </button>
 
             <button
               onClick={() =>

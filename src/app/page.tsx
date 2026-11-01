@@ -38,7 +38,9 @@ export default function OwnFlixApp() {
     item: MediaItem;
     episode?: Episode;
     startFromBeginning?: boolean;
+    roomId?: string | null;
   } | null>(null);
+  const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
 
   const [adminModal, setAdminModal] = useState<{
     open: boolean;
@@ -152,6 +154,13 @@ export default function OwnFlixApp() {
 
   useEffect(() => {
     fetchProfiles().finally(() => setLoading(false));
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const roomCode = params.get("room");
+      if (roomCode) {
+        setPendingRoomId(roomCode.toUpperCase());
+      }
+    }
   }, [fetchProfiles]);
 
   useEffect(() => {
@@ -159,6 +168,40 @@ export default function OwnFlixApp() {
       fetchMedia(activeProfile.id);
     }
   }, [activeProfile, fetchMedia]);
+
+  // Automatically join Watch Together room from ?room=XXXXXX share link
+  useEffect(() => {
+    if (!pendingRoomId || !activeProfile || media.length === 0) return;
+
+    const joinSharedRoom = async () => {
+      try {
+        const res = await fetch(
+          `/api/rooms?roomId=${encodeURIComponent(pendingRoomId)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const room = data.room;
+          if (room) {
+            const matchedItem = media.find((m) => m.id === room.mediaItemId);
+            if (matchedItem) {
+              const matchedEpisode = room.episodeId
+                ? matchedItem.episodes.find((ep) => ep.id === room.episodeId)
+                : undefined;
+              setPlayingState({
+                item: matchedItem,
+                episode: matchedEpisode,
+                roomId: room.id,
+              });
+            }
+          }
+        }
+      } finally {
+        setPendingRoomId(null);
+      }
+    };
+
+    joinSharedRoom();
+  }, [pendingRoomId, activeProfile, media]);
 
   // Keep detailItem synced when media state refreshes
   useEffect(() => {
@@ -352,8 +395,18 @@ export default function OwnFlixApp() {
         item={playingState.item}
         initialEpisode={playingState.episode}
         startFromBeginning={playingState.startFromBeginning}
+        initialRoomId={playingState.roomId}
         activeProfile={activeProfile}
-        onClose={() => setPlayingState(null)}
+        onClose={() => {
+          setPlayingState(null);
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has("room")) {
+              url.searchParams.delete("room");
+              window.history.replaceState({}, "", url.toString());
+            }
+          }
+        }}
         onProgressUpdated={() => fetchMedia(activeProfile.id)}
       />
     );
