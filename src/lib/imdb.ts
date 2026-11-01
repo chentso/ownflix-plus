@@ -14,7 +14,7 @@ export interface ImdbMetadata {
   backdropUrl: string;
 }
 
-interface SuggestionItem {
+export interface SuggestionItem {
   id: string;
   l: string;
   q?: string;

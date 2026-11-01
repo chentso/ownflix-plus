@@ -11,6 +11,7 @@ import {
   ChevronRight,
   X,
   HardDrive,
+  MoreVertical,
 } from "lucide-react";
 
 interface MediaRowProps {
@@ -22,6 +23,7 @@ interface MediaRowProps {
   onMoreInfo: (item: MediaItem) => void;
   onToggleMyList: (item: MediaItem) => void;
   onRemoveContinueWatching?: (item: MediaItem) => void;
+  onOpenContextMenu?: (item: MediaItem, x: number, y: number) => void;
 }
 
 function formatDuration(sec: number): string {
@@ -42,6 +44,7 @@ export default function MediaRow({
   onMoreInfo,
   onToggleMyList,
   onRemoveContinueWatching,
+  onOpenContextMenu,
 }: MediaRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -105,6 +108,13 @@ export default function MediaRow({
             return (
               <div
                 key={item.id}
+                onContextMenu={(e) => {
+                  if (onOpenContextMenu) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenContextMenu(item, e.clientX, e.clientY);
+                  }
+                }}
                 className="group/card relative shrink-0 w-[165px] sm:w-[190px] md:w-[215px] rounded-md bg-[#181818] transition-all duration-300 hover:scale-105 hover:z-20 shadow-md hover:shadow-2xl overflow-hidden border border-zinc-800/70 hover:border-zinc-600 flex flex-col"
               >
                 {/* 2:3 Vertical Poster Area */}
@@ -133,20 +143,37 @@ export default function MediaRow({
                     )}
                   </div>
 
-                  {/* Top-Right Remove from Continue Watching */}
-                  {isContinueWatching && onRemoveContinueWatching && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveContinueWatching(item);
-                      }}
-                      title="Remove from Continue Watching"
-                      className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-black/80 hover:bg-black text-zinc-300 hover:text-white flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  {/* Top-Right Context Menu Trigger & Remove from Continue Watching */}
+                  <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                    {isContinueWatching && onRemoveContinueWatching && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveContinueWatching(item);
+                        }}
+                        title="Remove from Continue Watching"
+                        className="w-7 h-7 rounded-full bg-black/80 hover:bg-black border border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {onOpenContextMenu && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          onOpenContextMenu(item, rect.left, rect.bottom + 4);
+                        }}
+                        title="Options (Identify / Edit Metadata)"
+                        className="w-7 h-7 rounded-full bg-black/80 hover:bg-black border border-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center shadow"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
 
                   {/* Center Hover Play Icon */}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity bg-black/35">

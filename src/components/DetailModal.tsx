@@ -12,6 +12,7 @@ import {
   Subtitles,
   Pencil,
   RotateCcw,
+  Search,
 } from "lucide-react";
 
 interface DetailModalProps {
@@ -22,6 +23,7 @@ interface DetailModalProps {
   onToggleMyList: (item: MediaItem) => void;
   onSelectMedia: (item: MediaItem) => void;
   onEditItem: (item: MediaItem) => void;
+  onIdentifyItem?: (item: MediaItem) => void;
 }
 
 function formatDurationMin(sec: number): string {
@@ -41,6 +43,7 @@ export default function DetailModal({
   onToggleMyList,
   onSelectMedia,
   onEditItem,
+  onIdentifyItem,
 }: DetailModalProps) {
   const seasons = useMemo(() => {
     const set = new Set<number>();
@@ -103,14 +106,25 @@ export default function DetailModal({
             <X className="w-5 h-5" />
           </button>
 
-          {/* Edit Metadata Quick Button */}
-          <button
-            onClick={() => onEditItem(item)}
-            className="absolute top-4 right-16 px-3 py-1.5 rounded-full bg-[#181818]/90 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-zinc-700 transition-colors z-10"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            <span>Edit Metadata</span>
-          </button>
+          {/* Identify & Edit Metadata Quick Buttons */}
+          <div className="absolute top-4 right-16 flex items-center gap-2 z-10">
+            {onIdentifyItem && (
+              <button
+                onClick={() => onIdentifyItem(item)}
+                className="px-3 py-1.5 rounded-full bg-[#2563EB]/90 hover:bg-[#3B82F6] text-white text-xs font-semibold flex items-center gap-1.5 border border-blue-400/40 shadow-lg transition-colors"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Identify / Search IMDb</span>
+              </button>
+            )}
+            <button
+              onClick={() => onEditItem(item)}
+              className="px-3 py-1.5 rounded-full bg-[#181818]/90 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-zinc-700 transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Edit Metadata</span>
+            </button>
+          </div>
 
           {/* Bottom Left Title & Buttons */}
           <div className="absolute bottom-6 left-6 right-6">

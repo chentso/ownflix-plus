@@ -10,6 +10,7 @@ import DetailModal from "@/components/DetailModal";
 import NetflixPlayer from "@/components/NetflixPlayer";
 import AdminDashboardModal from "@/components/AdminDashboardModal";
 import ProfileAccountModal from "@/components/ProfileAccountModal";
+import IdentifyMetadataModal from "@/components/IdentifyMetadataModal";
 import {
   HardDrive,
   Play,
@@ -21,6 +22,10 @@ import {
   X,
   Eye,
   EyeOff,
+  MoreVertical,
+  Search,
+  RefreshCw,
+  SlidersHorizontal,
 } from "lucide-react";
 
 export default function OwnFlixApp() {
@@ -49,6 +54,15 @@ export default function OwnFlixApp() {
   }>({ open: false, tab: "folders", editItem: null });
 
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+
+  // Emby-style Movie Context Menu & Identify Metadata Modal state
+  const [contextMenu, setContextMenu] = useState<{
+    item: MediaItem;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [identifyItem, setIdentifyItem] = useState<MediaItem | null>(null);
+  const [refreshingItemId, setRefreshingItemId] = useState<string | null>(null);
 
   // Password prompt when switching to a locked profile from Navbar
   const [pendingSwitchProfile, setPendingSwitchProfile] =
@@ -250,8 +264,61 @@ export default function OwnFlixApp() {
     startFromBeginning = false
   ) => {
     setDetailItem(null);
+    setContextMenu(null);
     setPlayingState({ item, episode, startFromBeginning });
   };
+
+  const handleOpenContextMenu = useCallback(
+    (item: MediaItem, x: number, y: number) => {
+      const menuWidth = 250;
+      const menuHeight = 290;
+      const clampedX =
+        typeof window !== "undefined"
+          ? Math.min(Math.max(12, x), window.innerWidth - menuWidth - 12)
+          : x;
+      const clampedY =
+        typeof window !== "undefined"
+          ? Math.min(Math.max(12, y), window.innerHeight - menuHeight - 12)
+          : y;
+      setContextMenu({ item, x: clampedX, y: clampedY });
+    },
+    []
+  );
+
+  const handleQuickRefreshMetadata = async (item: MediaItem) => {
+    setContextMenu(null);
+    setRefreshingItemId(item.id);
+    try {
+      const res = await fetch("/api/imdb", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mediaItemId: item.id,
+          query: item.title,
+        }),
+      });
+      if (res.ok && activeProfile) {
+        await fetchMedia(activeProfile.id);
+      }
+    } finally {
+      setRefreshingItemId(null);
+    }
+  };
+
+  // Close context menu on Escape or scroll
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    const handleScroll = () => setContextMenu(null);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [contextMenu]);
 
   // Filter catalog by Kids mode if activeProfile.isKids
   const profileFilteredMedia = useMemo(() => {
@@ -459,6 +526,11 @@ export default function OwnFlixApp() {
                 <div
                   key={item.id}
                   onClick={() => setDetailItem(item)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleOpenContextMenu(item, e.clientX, e.clientY);
+                  }}
                   className="group bg-[#181818] rounded-md overflow-hidden border border-zinc-800 hover:border-zinc-500 transition-all hover:scale-105 cursor-pointer flex flex-col"
                 >
                   <div className="relative aspect-[2/3] bg-zinc-900">
@@ -468,6 +540,16 @@ export default function OwnFlixApp() {
                       alt={item.title}
                       className="w-full h-full object-cover"
                     />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenContextMenu(item, e.clientX, e.clientY);
+                      }}
+                      title="More options / Identify metadata"
+                      className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-black/75 hover:bg-[#2563EB] text-zinc-200 hover:text-white border border-zinc-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-md"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
                     <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <button
                         onClick={(e) => {
@@ -547,6 +629,11 @@ export default function OwnFlixApp() {
               {categoryMedia.map((item) => (
                 <div
                   key={item.id}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleOpenContextMenu(item, e.clientX, e.clientY);
+                  }}
                   className="bg-[#181818] border border-zinc-800 hover:border-zinc-600 rounded-lg overflow-hidden flex flex-col transition-transform hover:scale-[1.03]"
                 >
                   <div
@@ -559,6 +646,16 @@ export default function OwnFlixApp() {
                       alt={item.title}
                       className="w-full h-full object-cover"
                     />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenContextMenu(item, e.clientX, e.clientY);
+                      }}
+                      title="More options / Identify metadata"
+                      className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-black/75 hover:bg-[#2563EB] text-zinc-200 hover:text-white border border-zinc-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-md"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
                     <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <div className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-lg">
                         <Play className="w-6 h-6 fill-black ml-0.5" />
@@ -637,6 +734,7 @@ export default function OwnFlixApp() {
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
                 onRemoveContinueWatching={handleRemoveContinueWatching}
+                onOpenContextMenu={handleOpenContextMenu}
               />
             )}
 
@@ -648,6 +746,7 @@ export default function OwnFlixApp() {
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
+                onOpenContextMenu={handleOpenContextMenu}
               />
             )}
 
@@ -657,6 +756,7 @@ export default function OwnFlixApp() {
               onPlay={(item) => handlePlay(item)}
               onMoreInfo={(item) => setDetailItem(item)}
               onToggleMyList={handleToggleMyList}
+              onOpenContextMenu={handleOpenContextMenu}
             />
 
             {myListItems.length > 0 && (
@@ -666,6 +766,7 @@ export default function OwnFlixApp() {
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
+                onOpenContextMenu={handleOpenContextMenu}
               />
             )}
 
@@ -677,6 +778,7 @@ export default function OwnFlixApp() {
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
+                onOpenContextMenu={handleOpenContextMenu}
               />
             )}
 
@@ -687,6 +789,7 @@ export default function OwnFlixApp() {
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
+                onOpenContextMenu={handleOpenContextMenu}
               />
             )}
 
@@ -697,6 +800,7 @@ export default function OwnFlixApp() {
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
+                onOpenContextMenu={handleOpenContextMenu}
               />
             )}
           </main>
@@ -714,6 +818,145 @@ export default function OwnFlixApp() {
           onSelectMedia={(item) => setDetailItem(item)}
           onEditItem={(item) => {
             setDetailItem(null);
+            setAdminModal({ open: true, tab: "media", editItem: item });
+          }}
+          onIdentifyItem={(item) => {
+            setDetailItem(null);
+            setIdentifyItem(item);
+          }}
+        />
+      )}
+
+      {/* Emby-Style Movie Context Menu */}
+      {contextMenu && (
+        <div
+          onClick={() => setContextMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu(null);
+          }}
+          className="fixed inset-0 z-[55]"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            className="fixed w-64 bg-[#181818]/98 backdrop-blur-md border border-zinc-700/90 rounded-xl shadow-[0_18px_45px_rgba(0,0,0,0.85)] py-1.5 text-sm text-zinc-200 select-none overflow-hidden"
+          >
+            {/* Context Menu Movie Header */}
+            <div className="px-3.5 py-2 border-b border-zinc-800/90 flex items-center gap-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={contextMenu.item.posterUrl || contextMenu.item.backdropUrl}
+                alt={contextMenu.item.title}
+                className="w-8 h-11 rounded object-cover bg-zinc-900 shrink-0 border border-zinc-700"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-white text-xs truncate">
+                  {contextMenu.item.title}
+                </div>
+                <div className="text-[11px] text-zinc-400">
+                  {contextMenu.item.releaseYear} &bull;{" "}
+                  {contextMenu.item.type === "SERIES" ? "Series" : "Movie"}
+                </div>
+              </div>
+            </div>
+
+            {/* Playback & Info */}
+            <div className="py-1 border-b border-zinc-800/80">
+              <button
+                onClick={() => handlePlay(contextMenu.item)}
+                className="w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-zinc-800/90 flex items-center gap-2.5 text-white transition-colors"
+              >
+                <Play className="w-3.5 h-3.5 fill-white text-white" />
+                <span>Play</span>
+              </button>
+              <button
+                onClick={() => {
+                  const target = contextMenu.item;
+                  setContextMenu(null);
+                  setDetailItem(target);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-zinc-800/90 flex items-center gap-2.5 text-zinc-200 transition-colors"
+              >
+                <Info className="w-3.5 h-3.5 text-zinc-400" />
+                <span>View Details</span>
+              </button>
+              <button
+                onClick={() => {
+                  const target = contextMenu.item;
+                  setContextMenu(null);
+                  handleToggleMyList(target);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-zinc-800/90 flex items-center gap-2.5 text-zinc-200 transition-colors"
+              >
+                {contextMenu.item.inMyList ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#3B82F6]" />
+                    <span>Remove from My List</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Add to My List</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Emby Metadata Actions */}
+            <div className="py-1">
+              <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                Metadata &amp; Artwork
+              </div>
+              <button
+                onClick={() => {
+                  const target = contextMenu.item;
+                  setContextMenu(null);
+                  setIdentifyItem(target);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs font-semibold hover:bg-[#2563EB]/20 text-[#3B82F6] hover:text-blue-300 flex items-center gap-2.5 transition-colors"
+              >
+                <Search className="w-3.5 h-3.5 text-[#3B82F6]" />
+                <span>Identify / Search Metadata...</span>
+              </button>
+              <button
+                onClick={() => handleQuickRefreshMetadata(contextMenu.item)}
+                disabled={refreshingItemId === contextMenu.item.id}
+                className="w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-zinc-800/90 flex items-center gap-2.5 text-zinc-200 transition-colors"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 text-amber-400 ${
+                    refreshingItemId === contextMenu.item.id
+                      ? "animate-spin"
+                      : ""
+                  }`}
+                />
+                <span>Refresh Metadata (Auto IMDb)</span>
+              </button>
+              <button
+                onClick={() => {
+                  const target = contextMenu.item;
+                  setContextMenu(null);
+                  setAdminModal({ open: true, tab: "media", editItem: target });
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-zinc-800/90 flex items-center gap-2.5 text-zinc-200 transition-colors"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Edit Metadata Fields...</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Emby-Style Identify / Search Metadata Modal */}
+      {identifyItem && (
+        <IdentifyMetadataModal
+          item={identifyItem}
+          onClose={() => setIdentifyItem(null)}
+          onUpdated={() => fetchMedia(activeProfile.id)}
+          onOpenManualEditor={(item) => {
+            setIdentifyItem(null);
             setAdminModal({ open: true, tab: "media", editItem: item });
           }}
         />
