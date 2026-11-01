@@ -17,6 +17,19 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export type QualityPreset = "original" | "1080p" | "720p" | "480p" | "360p";
+export type AudioNormMode = "off" | "voice_boost" | "night_mode" | "loudnorm";
+
+const AUDIO_NORM_FILTERS: Record<Exclude<AudioNormMode, "off">, string> = {
+  // Dialogue Boost: rolls off sub-bass explosions (<85Hz), boosts human speech clarity (300Hz-3.2kHz), and applies FFmpeg Dynamic Audio Normalizer
+  voice_boost:
+    "highpass=f=85,equalizer=f=350:t=q:w=1.0:g=2.5,equalizer=f=2200:t=q:w=1.2:g=5.5,acompressor=threshold=-22dB:ratio=4:attack=8:release=180:makeup=4,dynaudnorm=f=150:g=13:p=0.92:m=10.0",
+  // Night Mode: aggressive dynamic range compression so loud action/music and quiet whispers stay at the same level
+  night_mode:
+    "highpass=f=100,equalizer=f=2400:t=q:w=1.1:g=6.0,acompressor=threshold=-28dB:ratio=8:attack=5:release=220:makeup=6,dynaudnorm=f=100:g=9:p=0.90:m=12.0",
+  // Broadcast Loudness: EBU R128 loudness target + smooth dynamic normalization
+  loudnorm:
+    "dynaudnorm=f=200:g=15:p=0.94:m=8.0",
+};
 
 interface TranscodeProfile {
   maxWidth: number | null;
@@ -69,6 +82,9 @@ export async function GET(req: NextRequest) {
   const rawQuality = (searchParams.get("quality") || "original") as QualityPreset;
   const quality: QualityPreset =
     rawQuality in QUALITY_PROFILES ? rawQuality : "original";
+  const rawAudioNorm = (searchParams.get("audioNorm") || "off") as AudioNormMode;
+  const audioNorm: AudioNormMode =
+    rawAudioNorm in AUDIO_NORM_FILTERS ? rawAudioNorm : "off";
   const forceTranscode =
     searchParams.get("transcode") === "1" || quality !== "original";
   const forceRemuxOnly = searchParams.get("remux") === "1";
@@ -129,6 +145,7 @@ export async function GET(req: NextRequest) {
   const ext = isRemoteInput ? ".mp4" : path.extname(filePath).toLowerCase();
   const needsFfmpegStream =
     forceTranscode ||
+    audioNorm !== "off" ||
     isRemoteInput ||
     ext === ".mkv" ||
     ext === ".avi" ||
@@ -144,7 +161,8 @@ export async function GET(req: NextRequest) {
     const profile =
       quality !== "original" ? QUALITY_PROFILES[quality] : null;
 
-    if (forceRemuxOnly && !forceTranscode && !profile) {
+    if ((forceRemuxOnly || (ext === ".mp4" && !forceTranscode)) && !profile) {
+      // Copy original video stream without re-encoding when only normalizing audio on an MP4
       args.push("-c:v", "copy");
     } else if (profile) {
       // Bandwidth-constrained transcode with resolution scaling & bitrate cap
@@ -182,6 +200,10 @@ export async function GET(req: NextRequest) {
         "-pix_fmt",
         "yuv420p"
       );
+    }
+
+    if (audioNorm !== "off") {
+      args.push("-af", AUDIO_NORM_FILTERS[audioNorm]);
     }
 
     args.push(
