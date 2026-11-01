@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Profile } from "@/types/ownflix";
 import { AVATAR_ICONS, renderProfileIcon } from "./ProfileGate";
+import AvatarPicker from "./AvatarPicker";
 import {
   generateFunnyProfileName,
   generateFunnyNameSuggestions,
@@ -254,54 +255,41 @@ export default function ProfileAccountModal({
           </div>
         </div>
 
-        {/* Avatar Color & Icon Pickers */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-2">
-              Avatar Color
-            </label>
-            <div className="flex items-center gap-2.5">
-              {AVATAR_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setAvatarColor(c)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform ${
-                    avatarColor === c
-                      ? "scale-110 ring-2 ring-white"
-                      : "opacity-75 hover:opacity-100"
-                  }`}
-                  style={{ backgroundColor: c }}
-                >
-                  {avatarColor === c && (
-                    <Check className="w-3.5 h-3.5 text-white" />
-                  )}
-                </button>
-              ))}
-            </div>
+        {/* Avatar Color */}
+        <div className="mb-5">
+          <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-2">
+            Avatar Color
+          </label>
+          <div className="flex items-center gap-2.5">
+            {AVATAR_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setAvatarColor(c)}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform ${
+                  avatarColor === c
+                    ? "scale-110 ring-2 ring-white"
+                    : "opacity-75 hover:opacity-100"
+                }`}
+                style={{ backgroundColor: c }}
+              >
+                {avatarColor === c && (
+                  <Check className="w-3.5 h-3.5 text-white" />
+                )}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-2">
-              Emblem
-            </label>
-            <div className="grid grid-cols-6 gap-1.5">
-              {AVATAR_ICONS.map(({ id, Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setAvatarIcon(id)}
-                  className={`p-2 rounded flex items-center justify-center border transition-colors ${
-                    avatarIcon === id
-                      ? "bg-zinc-700 border-white text-white"
-                      : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Avatar Emblem & Emoji Picker */}
+        <div className="mb-6">
+          <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-2">
+            Avatar Emblem & Emoji
+          </label>
+          <AvatarPicker
+            selectedId={avatarIcon}
+            onSelect={setAvatarIcon}
+          />
         </div>
 
         {/* Password Update Box */}

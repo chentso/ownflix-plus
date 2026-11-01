@@ -7,6 +7,13 @@ import {
   generateFunnyNameSuggestions,
 } from "@/lib/nameGenerator";
 import {
+  renderProfileIcon,
+  AVATAR_ICONS,
+  AVATAR_EMBLEMS,
+  AVATAR_EMOJIS,
+} from "@/lib/avatarCatalog";
+import AvatarPicker from "./AvatarPicker";
+import {
   Plus,
   Pencil,
   Trash2,
@@ -28,6 +35,13 @@ import {
   RefreshCw,
 } from "lucide-react";
 
+export {
+  renderProfileIcon,
+  AVATAR_ICONS,
+  AVATAR_EMBLEMS,
+  AVATAR_EMOJIS,
+};
+
 interface ProfileGateProps {
   profiles: Profile[];
   onSelectProfile: (profile: Profile) => void;
@@ -35,29 +49,14 @@ interface ProfileGateProps {
   onProfilesChanged: () => Promise<void>;
 }
 
-const AVATAR_COLORS = [
-  "#2563EB", // Netflix Red
+export const AVATAR_COLORS = [
+  "#2563EB", // Royal Blue
   "#0071EB", // Electric Blue
   "#10B981", // Emerald Green
   "#F59E0B", // Amber Gold
   "#8B5CF6", // Vivid Purple
   "#EC4899", // Neon Pink
 ];
-
-export const AVATAR_ICONS = [
-  { id: "smile", label: "Classic", Icon: Smile },
-  { id: "crown", label: "Crown", Icon: Crown },
-  { id: "zap", label: "Bolt", Icon: Zap },
-  { id: "rocket", label: "Rocket", Icon: Rocket },
-  { id: "tv", label: "Cinema", Icon: Tv },
-  { id: "flame", label: "Flame", Icon: Flame },
-];
-
-export function renderProfileIcon(iconId: string, className = "w-14 h-14") {
-  const found = AVATAR_ICONS.find((i) => i.id === iconId);
-  const IconComponent = found ? found.Icon : Smile;
-  return <IconComponent className={className} strokeWidth={1.8} />;
-}
 
 export default function ProfileGate({
   profiles,
@@ -620,7 +619,7 @@ export default function ProfileGate({
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <form
             onSubmit={handleSave}
-            className="bg-[#181818] border border-zinc-800 rounded-lg max-w-md w-full p-6 md:p-8 shadow-2xl my-auto"
+            className="bg-[#181818] border border-zinc-800 rounded-lg max-w-lg w-full p-6 md:p-8 shadow-2xl my-auto"
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">
@@ -741,27 +740,15 @@ export default function ProfileGate({
               </div>
             </div>
 
-            {/* Icon Picker */}
+            {/* Avatar Emblem & Emoji Picker */}
             <div className="mb-5">
               <label className="block text-xs uppercase tracking-wider text-zinc-400 mb-2">
-                Avatar Emblem
+                Avatar Emblem & Emoji
               </label>
-              <div className="grid grid-cols-6 gap-2">
-                {AVATAR_ICONS.map(({ id, Icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setAvatarIcon(id)}
-                    className={`p-2.5 rounded flex items-center justify-center border transition-colors ${
-                      avatarIcon === id
-                        ? "bg-zinc-700 border-white text-white"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </button>
-                ))}
-              </div>
+              <AvatarPicker
+                selectedId={avatarIcon}
+                onSelect={setAvatarIcon}
+              />
             </div>
 
             {/* Profile Password Lock Section */}
