@@ -14,6 +14,8 @@ import {
   RotateCcw,
   Search,
   ListPlus,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 interface DetailModalProps {
@@ -26,6 +28,7 @@ interface DetailModalProps {
   onEditItem: (item: MediaItem) => void;
   onIdentifyItem?: (item: MediaItem) => void;
   onAddToPlaylist?: (item: MediaItem) => void;
+  onToggleMarkDeletion?: (item: MediaItem) => void;
 }
 
 function formatDurationMin(sec: number): string {
@@ -47,6 +50,7 @@ export default function DetailModal({
   onEditItem,
   onIdentifyItem,
   onAddToPlaylist,
+  onToggleMarkDeletion,
 }: DetailModalProps) {
   const seasons = useMemo(() => {
     const set = new Set<number>();
@@ -193,7 +197,43 @@ export default function DetailModal({
                   <ListPlus className="w-5 h-5" />
                 </button>
               )}
+
+              {onToggleMarkDeletion && (
+                <button
+                  onClick={() => onToggleMarkDeletion(item)}
+                  className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-colors shadow ${
+                    item.markedForDeletion
+                      ? "border-red-500 bg-red-950/80 text-red-300 hover:bg-red-900"
+                      : "border-zinc-400 hover:border-red-400 bg-black/50 text-zinc-300 hover:text-red-400"
+                  }`}
+                  title={
+                    item.markedForDeletion
+                      ? "Marked for deletion (Click to unmark)"
+                      : "Mark for deletion (Watched once)"
+                  }
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
             </div>
+
+            {item.markedForDeletion && (
+              <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-red-950/85 border border-red-800 text-xs text-red-200">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>
+                  Marked for deletion &bull; Flagged for disk cleanup after single viewing
+                  {item.markedForDeletionBy ? ` by ${item.markedForDeletionBy}` : ""}
+                </span>
+                {onToggleMarkDeletion && (
+                  <button
+                    onClick={() => onToggleMarkDeletion(item)}
+                    className="ml-2 underline text-red-300 hover:text-white font-medium"
+                  >
+                    Unmark
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

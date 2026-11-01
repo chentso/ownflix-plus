@@ -11,6 +11,7 @@ import {
   ChevronRight,
   X,
   MoreVertical,
+  Trash2,
 } from "lucide-react";
 
 interface MediaRowProps {
@@ -126,6 +127,16 @@ export default function MediaRow({
                     className="w-full h-full object-cover object-center group-hover/card:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-black/25 opacity-90" />
+
+                  {item.markedForDeletion && (
+                    <div
+                      title={`Marked for deletion after watching${item.markedForDeletionBy ? ` by ${item.markedForDeletionBy}` : ""}`}
+                      className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950/90 text-red-200 border border-red-700/80 shadow-md backdrop-blur-sm"
+                    >
+                      <Trash2 className="w-2.5 h-2.5 text-red-400" />
+                      <span className="hidden sm:inline">Marked for removal</span>
+                    </div>
+                  )}
 
                   {/* Top-Right Context Menu Trigger & Remove from Continue Watching */}
                   <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">

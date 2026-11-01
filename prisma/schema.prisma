@@ -72,6 +72,9 @@ model MediaItem {
   audioTracks    String          @default("English (5.1 Surround),English (Original Stereo)")
   subtitleTracks String          @default("English [CC],Español,Français")
   resolution     String          @default("4K Ultra HD")
+  markedForDeletion   Boolean         @default(false)
+  markedForDeletionAt DateTime?
+  markedForDeletionBy String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   episodes       Episode[]

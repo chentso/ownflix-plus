@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logProfileActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 
@@ -107,8 +108,31 @@ export async function PATCH(
         ? { isFeatured: Boolean(body.isFeatured) }
         : {}),
       ...(body.resolution !== undefined ? { resolution: body.resolution } : {}),
+      ...(body.markedForDeletion !== undefined
+        ? {
+            markedForDeletion: Boolean(body.markedForDeletion),
+            markedForDeletionAt: body.markedForDeletion ? new Date() : null,
+            markedForDeletionBy: body.markedForDeletion
+              ? body.markedForDeletionBy || "User"
+              : null,
+          }
+        : {}),
     },
   });
+
+  if (body.markedForDeletion !== undefined && body.profileId) {
+    await logProfileActivity({
+      profileId: body.profileId,
+      action: body.markedForDeletion
+        ? "MEDIA_MARK_DELETION"
+        : "MEDIA_UNMARK_DELETION",
+      details: body.markedForDeletion
+        ? `Marked "${updated.title}" for deletion after watching`
+        : `Unmarked "${updated.title}" from deletion`,
+      mediaItemId: updated.id,
+      mediaTitle: updated.title,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ item: updated });
 }

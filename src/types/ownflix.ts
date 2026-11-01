@@ -62,6 +62,9 @@ export interface MediaItem {
   audioTracks: string;
   subtitleTracks: string;
   resolution: string;
+  markedForDeletion?: boolean;
+  markedForDeletionAt?: string | null;
+  markedForDeletionBy?: string | null;
   episodes: Episode[];
   progress: WatchProgress | null;
   inMyList: boolean;

@@ -30,6 +30,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   ListPlus,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function OwnFlixApp() {
@@ -279,6 +281,72 @@ export default function OwnFlixApp() {
     await fetchMedia(activeProfile.id);
   };
 
+  const handleToggleMarkDeletion = async (item: MediaItem) => {
+    const nextMarked = !item.markedForDeletion;
+    // Optimistic local update
+    setMedia((prev) =>
+      prev.map((m) =>
+        m.id === item.id
+          ? {
+              ...m,
+              markedForDeletion: nextMarked,
+              markedForDeletionAt: nextMarked ? new Date().toISOString() : null,
+              markedForDeletionBy: nextMarked
+                ? activeProfile?.name || "User"
+                : null,
+            }
+          : m
+      )
+    );
+    if (detailItem && detailItem.id === item.id) {
+      setDetailItem((prev) =>
+        prev
+          ? {
+              ...prev,
+              markedForDeletion: nextMarked,
+              markedForDeletionAt: nextMarked ? new Date().toISOString() : null,
+              markedForDeletionBy: nextMarked
+                ? activeProfile?.name || "User"
+                : null,
+            }
+          : prev
+      );
+    }
+    if (contextMenu && contextMenu.item.id === item.id) {
+      setContextMenu((prev) =>
+        prev
+          ? {
+              ...prev,
+              item: {
+                ...prev.item,
+                markedForDeletion: nextMarked,
+                markedForDeletionAt: nextMarked ? new Date().toISOString() : null,
+                markedForDeletionBy: nextMarked
+                  ? activeProfile?.name || "User"
+                  : null,
+              },
+            }
+          : prev
+      );
+    }
+    try {
+      await fetch(`/api/media/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          markedForDeletion: nextMarked,
+          profileName: activeProfile?.name || "User",
+          profileId: activeProfile?.id,
+        }),
+      });
+      if (activeProfile) {
+        await fetchMedia(activeProfile.id);
+      }
+    } catch (err) {
+      console.error("Failed to toggle mark for deletion:", err);
+    }
+  };
+
   const handlePlay = (
     item: MediaItem,
     episode?: Episode,
@@ -515,6 +583,7 @@ export default function OwnFlixApp() {
         initialRoomId={playingState.roomId}
         activeProfile={activeProfile}
         playlistQueue={playingState.queue || []}
+        onToggleMarkDeletion={handleToggleMarkDeletion}
         onPlayNextFromQueue={(nextItem, remainingQueue) => {
           setPlayingState({
             item: nextItem,
@@ -599,6 +668,15 @@ export default function OwnFlixApp() {
                       alt={item.title}
                       className="w-full h-full object-cover"
                     />
+                    {item.markedForDeletion && (
+                      <div
+                        title={`Marked for deletion${item.markedForDeletionBy ? ` by ${item.markedForDeletionBy}` : ""}`}
+                        className="absolute top-2 left-2 z-20 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950/90 text-red-200 border border-red-700/80 shadow-md backdrop-blur-sm"
+                      >
+                        <Trash2 className="w-2.5 h-2.5 text-red-400" />
+                        <span>Marked for removal</span>
+                      </div>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -714,6 +792,15 @@ export default function OwnFlixApp() {
                       alt={item.title}
                       className="w-full h-full object-cover"
                     />
+                    {item.markedForDeletion && (
+                      <div
+                        title={`Marked for deletion${item.markedForDeletionBy ? ` by ${item.markedForDeletionBy}` : ""}`}
+                        className="absolute top-2 left-2 z-20 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950/90 text-red-200 border border-red-700/80 shadow-md backdrop-blur-sm"
+                      >
+                        <Trash2 className="w-2.5 h-2.5 text-red-400" />
+                        <span>Marked for removal</span>
+                      </div>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -876,6 +963,7 @@ export default function OwnFlixApp() {
           onClose={() => setDetailItem(null)}
           onPlay={(item, ep, fromStart) => handlePlay(item, ep, fromStart)}
           onToggleMyList={handleToggleMyList}
+          onToggleMarkDeletion={handleToggleMarkDeletion}
           onSelectMedia={(item) => setDetailItem(item)}
           onEditItem={(item) => {
             setDetailItem(null);
@@ -977,6 +1065,31 @@ export default function OwnFlixApp() {
               >
                 <ListPlus className="w-3.5 h-3.5 text-[#3B82F6]" />
                 <span>Add to Playlist...</span>
+              </button>
+              <button
+                onClick={() => {
+                  const target = contextMenu.item;
+                  setContextMenu(null);
+                  handleToggleMarkDeletion(target);
+                }}
+                className={`w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-zinc-800/90 flex items-center gap-2.5 transition-colors ${
+                  contextMenu.item.markedForDeletion
+                    ? "text-red-400 hover:text-red-300"
+                    : "text-zinc-200"
+                }`}
+              >
+                <Trash2
+                  className={`w-3.5 h-3.5 ${
+                    contextMenu.item.markedForDeletion
+                      ? "text-red-400"
+                      : "text-zinc-400"
+                  }`}
+                />
+                <span>
+                  {contextMenu.item.markedForDeletion
+                    ? "Unmark from Deletion"
+                    : "Mark for Deletion (Watched Once)"}
+                </span>
               </button>
             </div>
 

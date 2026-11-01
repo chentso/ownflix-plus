@@ -165,3 +165,20 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ item: created }, { status: 201 });
 }
+
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const purgeMarked = searchParams.get("purgeMarked") === "true";
+
+  if (purgeMarked) {
+    const deleted = await prisma.mediaItem.deleteMany({
+      where: { markedForDeletion: true },
+    });
+    return NextResponse.json({ count: deleted.count, success: true });
+  }
+
+  return NextResponse.json(
+    { error: "Missing purgeMarked=true parameter" },
+    { status: 400 }
+  );
+}

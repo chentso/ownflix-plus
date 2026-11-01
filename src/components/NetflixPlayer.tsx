@@ -45,6 +45,7 @@ interface NetflixPlayerProps {
   onProgressUpdated: () => void;
   playlistQueue?: MediaItem[];
   onPlayNextFromQueue?: (nextItem: MediaItem, remainingQueue: MediaItem[]) => void;
+  onToggleMarkDeletion?: (item: MediaItem) => void;
 }
 
 interface CueItem {
@@ -565,7 +566,12 @@ export default function NetflixPlayer({
   onProgressUpdated,
   playlistQueue = [],
   onPlayNextFromQueue,
+  onToggleMarkDeletion,
 }: NetflixPlayerProps) {
+  const [markedForDeletion, setMarkedForDeletion] = useState(
+    Boolean(item.markedForDeletion)
+  );
+  const [showEndedPrompt, setShowEndedPrompt] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrubBarRef = useRef<HTMLDivElement>(null);
@@ -1845,6 +1851,9 @@ export default function NetflixPlayer({
             onPlayNextFromQueue(playlistQueue[0], playlistQueue.slice(1));
           } else {
             setIsPlaying(false);
+            if (!currentEpisode) {
+              setShowEndedPrompt(true);
+            }
           }
         }}
         className="absolute inset-0 w-full h-full object-contain bg-black cursor-pointer"
@@ -1919,6 +1928,31 @@ export default function NetflixPlayer({
             >
               <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
               <span>Jump Intro</span>
+            </button>
+          )}
+
+          {onToggleMarkDeletion && (
+            <button
+              onClick={() => {
+                const nextState = !markedForDeletion;
+                setMarkedForDeletion(nextState);
+                onToggleMarkDeletion(item);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold border transition-colors shadow ${
+                markedForDeletion
+                  ? "bg-red-950/90 text-red-200 border-red-700/80 hover:bg-red-900"
+                  : "bg-zinc-800/80 text-zinc-300 border-zinc-700 hover:text-red-400 hover:border-red-400"
+              }`}
+              title={
+                markedForDeletion
+                  ? "Marked for deletion after watching (click to unmark)"
+                  : "Mark for deletion after watching"
+              }
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden sm:inline">
+                {markedForDeletion ? "Marked for Removal" : "Mark for Deletion"}
+              </span>
             </button>
           )}
         </div>
@@ -2012,6 +2046,59 @@ export default function NetflixPlayer({
             >
               <Play className="w-3.5 h-3.5 fill-black" />
               <span>Next Episode</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Finished Movie / Watched Once Deletion Prompt */}
+      {showEndedPrompt && !nextEpisode && (
+        <div className="absolute right-8 md:right-12 bottom-36 z-30 bg-[#181818] border border-zinc-700 rounded-lg p-5 shadow-2xl w-80 md:w-96 animate-in fade-in">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs uppercase tracking-wider text-zinc-400 font-bold flex items-center gap-1.5">
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span>Finished Watching?</span>
+            </span>
+            <button
+              onClick={() => setShowEndedPrompt(false)}
+              className="text-zinc-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="text-sm font-bold text-white mb-1.5">
+            {item.title}
+          </div>
+          <p className="text-xs text-zinc-300 mb-4 leading-relaxed">
+            {markedForDeletion
+              ? "This movie is marked for deletion. It will be flagged for disk cleanup in Admin Settings."
+              : "Finished watching and won't watch again? Mark it for deletion to keep your disk clean."}
+          </p>
+          <div className="flex items-center gap-2.5">
+            {onToggleMarkDeletion && (
+              <button
+                onClick={() => {
+                  const nextState = !markedForDeletion;
+                  setMarkedForDeletion(nextState);
+                  onToggleMarkDeletion(item);
+                }}
+                className={`flex-1 py-2 text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors ${
+                  markedForDeletion
+                    ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-600"
+                    : "bg-red-600 hover:bg-red-700 text-white"
+                }`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>
+                  {markedForDeletion ? "Unmark Title" : "Mark for Deletion"}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={handleExit}
+              className="py-2 px-3 text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded transition-colors"
+            >
+              Exit Player
             </button>
           </div>
         </div>
