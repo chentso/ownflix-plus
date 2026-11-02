@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_dark">#141414</color>
+    <color name="brand_accent">#3B82F6</color>
+    <color name="brand_primary">#2563EB</color>
+    <color name="surface_dark">#181818</color>
+    <color name="text_muted">#A1A1AA</color>
+    <color name="white">#FFFFFFFF</color>
+    <string name="app_description">Self-Hosted Netflix-Style Streaming for Android TV</string>
+    <string name="app_name">OwnFlix+</string>
+    <style name="Theme.OwnFlixTv" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:colorPrimary">@color/brand_primary</item>
+        <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="android:navigationBarColor">@color/background_dark</item>
+    </style>
+</resources>

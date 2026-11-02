@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "com.ownflix.tv.app-debug-59:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.ownflix.tv.app-main-61:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.ownflix.tv.app-debug-59:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.ownflix.tv.app-main-61:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.ownflix.tv.app-debug-59:/drawable_app_banner.xml.flat",
+        "source": "com.ownflix.tv.app-main-61:/drawable/app_banner.xml"
+    },
+    {
+        "merged": "com.ownflix.tv.app-debug-59:/xml_network_security_config.xml.flat",
+        "source": "com.ownflix.tv.app-main-61:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "com.ownflix.tv.app-debug-59:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.ownflix.tv.app-main-61:/drawable/ic_launcher_background.xml"
+    }
+]

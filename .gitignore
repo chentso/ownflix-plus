@@ -42,3 +42,6 @@ prisma/*.db-journal
 
 # local media files
 /media/
+
+# local launcher scripts
+Launch_Android_Studio.bat

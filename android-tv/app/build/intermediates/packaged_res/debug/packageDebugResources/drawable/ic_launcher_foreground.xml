@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Play arrow symbol with OwnFlix+ styling -->
+    <path
+        android:pathData="M38,28 L80,54 L38,80 Z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M78,32 L84,32 L84,40 L78,40 Z"
+        android:fillColor="#3B82F6" />
+    <path
+        android:pathData="M81,29 L81,43"
+        android:strokeColor="#3B82F6"
+        android:strokeWidth="3" />
+</vector>

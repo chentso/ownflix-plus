@@ -1,6 +1,7 @@
 package com.ownflix.tv.ui.screens.server
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -91,6 +93,8 @@ fun ServerConnectScreen(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
+                var isServerFieldFocused by remember { mutableStateOf(false) }
+
                 BasicTextField(
                     value = serverInput,
                     onValueChange = { serverInput = it },
@@ -102,13 +106,18 @@ fun ServerConnectScreen(
                     ),
                     cursorBrush = SolidColor(BrightBlue),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isServerFieldFocused = it.isFocused }
+                        .border(
+                            width = if (isServerFieldFocused) 2.dp else 1.dp,
+                            color = if (isServerFieldFocused) BrightBlue else Color.White.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     decorationBox = { innerTextField ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 14.dp, vertical = 12.dp)
-                        ) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             if (serverInput.isEmpty()) {
                                 Text("http://192.168.1.100:3000", color = Color.DarkGray, fontSize = 15.sp)
                             }

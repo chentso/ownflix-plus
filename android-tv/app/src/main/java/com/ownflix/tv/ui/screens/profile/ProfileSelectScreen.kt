@@ -3,6 +3,7 @@ package com.ownflix.tv.ui.screens.profile
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,12 +32,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.foundation.lazy.list.TvLazyRow
@@ -138,17 +145,42 @@ fun ProfileSelectScreen(
 
         // Profile Password Dialog
         passwordDialogProfile?.let { profile ->
+            val passwordFocusRequester = remember { FocusRequester() }
+            var isInputFocused by remember { mutableStateOf(false) }
+            var showPassword by remember { mutableStateOf(false) }
+
+            LaunchedEffect(profile.id) {
+                kotlinx.coroutines.delay(200)
+                try {
+                    passwordFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
+
+            fun submitUnlock() {
+                scope.launch {
+                    val ok = repository.verifyPassword(profile.id, pinInput)
+                    if (ok) {
+                        passwordDialogProfile = null
+                        prefs.activeProfileId = profile.id
+                        prefs.activeProfileName = profile.name
+                        onProfileSelected(profile)
+                    } else {
+                        pinError = true
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f)),
+                    .background(Color.Black.copy(alpha = 0.88f)),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     modifier = Modifier
-                        .width(400.dp)
-                        .background(SurfaceDark, RoundedCornerShape(12.dp))
-                        .padding(28.dp),
+                        .width(460.dp)
+                        .background(SurfaceDark, RoundedCornerShape(16.dp))
+                        .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -157,30 +189,50 @@ fun ProfileSelectScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Enter password for ${profile.name}",
                         fontSize = 13.sp,
                         color = Color.LightGray
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
+                    // Password Input Field with active focus border and keyboard support
                     BasicTextField(
                         value = pinInput,
-                        onValueChange = { pinInput = it },
+                        onValueChange = {
+                            pinInput = it
+                            pinError = false
+                        },
                         singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        textStyle = TextStyle(color = Color.White, fontSize = 18.sp),
+                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { submitUnlock() }
+                        ),
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
                         cursorBrush = SolidColor(BrightBlue),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(passwordFocusRequester)
+                            .onFocusChanged { isInputFocused = it.isFocused }
+                            .border(
+                                width = if (isInputFocused) 2.5.dp else 1.dp,
+                                color = if (isInputFocused) BrightBlue else Color.White.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         decorationBox = { innerTextField ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 14.dp, vertical = 12.dp)
-                            ) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
                                 if (pinInput.isEmpty()) {
                                     Text("Enter PIN or Password", color = Color.Gray, fontSize = 14.sp)
                                 }
@@ -190,30 +242,134 @@ fun ProfileSelectScreen(
                     )
 
                     if (pinError) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text("Incorrect password", color = DangerRed, fontSize = 12.sp)
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // D-Pad Friendly On-Screen Numeric Keypad for TV Remote
+                    Text(
+                        text = "On-Screen Keypad",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val keypadRow1 = listOf("1", "2", "3", "4", "5")
+                    val keypadRow2 = listOf("6", "7", "8", "9", "0")
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        keypadRow1.forEach { digit ->
+                            Button(
+                                onClick = {
+                                    pinInput += digit
+                                    pinError = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.1f),
+                                    focusedContainerColor = BrightBlue
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Text(digit, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        keypadRow2.forEach { digit ->
+                            Button(
+                                onClick = {
+                                    pinInput += digit
+                                    pinError = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.1f),
+                                    focusedContainerColor = BrightBlue
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Text(digit, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                if (pinInput.isNotEmpty()) {
+                                    pinInput = pinInput.dropLast(1)
+                                    pinError = false
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.colors(
+                                containerColor = Color.White.copy(alpha = 0.08f),
+                                focusedContainerColor = BrightBlue
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Text("⌫ Delete", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                pinInput = ""
+                                pinError = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.colors(
+                                containerColor = Color.White.copy(alpha = 0.08f),
+                                focusedContainerColor = BrightBlue
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Text("Clear", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = { showPassword = !showPassword },
+                            modifier = Modifier.weight(1.2f),
+                            colors = ButtonDefaults.colors(
+                                containerColor = Color.White.copy(alpha = 0.08f),
+                                focusedContainerColor = BrightBlue
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Text(if (showPassword) "Hide" else "Show", fontSize = 12.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Button(
-                            onClick = {
-                                scope.launch {
-                                    val ok = repository.verifyPassword(profile.id, pinInput)
-                                    if (ok) {
-                                        passwordDialogProfile = null
-                                        prefs.activeProfileId = profile.id
-                                        prefs.activeProfileName = profile.name
-                                        onProfileSelected(profile)
-                                    } else {
-                                        pinError = true
-                                    }
-                                }
-                            },
+                            onClick = { submitUnlock() },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.colors(
                                 containerColor = RoyalBlue,
@@ -224,7 +380,11 @@ fun ProfileSelectScreen(
                         }
 
                         Button(
-                            onClick = { passwordDialogProfile = null },
+                            onClick = {
+                                passwordDialogProfile = null
+                                pinInput = ""
+                                pinError = false
+                            },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.colors(
                                 containerColor = Color.White.copy(alpha = 0.15f),
