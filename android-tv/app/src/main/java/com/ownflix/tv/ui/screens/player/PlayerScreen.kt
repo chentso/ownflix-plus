@@ -10,6 +10,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -75,6 +76,7 @@ fun PlayerScreen(
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
+    var controlsResetTrigger by remember { mutableStateOf(0) }
 
     val focusRequester = remember { FocusRequester() }
 
@@ -93,6 +95,46 @@ fun PlayerScreen(
                 seekTo((startPositionSec * 1000).toLong())
             }
         }
+    }
+
+    // Seek helper that immediately reflects on UI
+    fun seekBy(deltaMs: Long) {
+        val dur = exoPlayer.duration.coerceAtLeast(0L)
+        val maxPos = if (dur > 0) dur else Long.MAX_VALUE
+        val newPos = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, maxPos)
+        exoPlayer.seekTo(newPos)
+        currentPositionMs = newPos
+        showControls = true
+        controlsResetTrigger++
+    }
+
+    // Intro detection
+    val introStart = episode?.introStart ?: mediaItem.introStart
+    val introEnd = episode?.introEnd ?: mediaItem.introEnd
+    val inIntro = introStart != null && introEnd != null &&
+            (currentPositionMs / 1000.0) >= introStart &&
+            (currentPositionMs / 1000.0) <= introEnd
+
+    fun skipIntro() {
+        if (introEnd != null) {
+            val targetMs = (introEnd * 1000).toLong()
+            exoPlayer.seekTo(targetMs)
+            currentPositionMs = targetMs
+            showControls = true
+            controlsResetTrigger++
+        }
+    }
+
+    fun togglePlayPause() {
+        if (exoPlayer.isPlaying) {
+            exoPlayer.pause()
+            isPlaying = false
+        } else {
+            exoPlayer.play()
+            isPlaying = true
+        }
+        showControls = true
+        controlsResetTrigger++
     }
 
     // Listen to player events
@@ -150,20 +192,13 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-hide controls after 4 seconds
-    LaunchedEffect(showControls) {
+    // Auto-hide controls after 5 seconds of inactivity
+    LaunchedEffect(showControls, controlsResetTrigger) {
         if (showControls) {
-            delay(4500)
+            delay(5000)
             showControls = false
         }
     }
-
-    // Intro detection
-    val introStart = episode?.introStart ?: mediaItem.introStart
-    val introEnd = episode?.introEnd ?: mediaItem.introEnd
-    val inIntro = introStart != null && introEnd != null &&
-            (currentPositionMs / 1000.0) >= introStart &&
-            (currentPositionMs / 1000.0) <= introEnd
 
     Box(
         modifier = Modifier
@@ -173,21 +208,47 @@ fun PlayerScreen(
             .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    showControls = true
                     when (event.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                            if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                        KeyEvent.KEYCODE_DPAD_LEFT,
+                        KeyEvent.KEYCODE_MEDIA_REWIND,
+                        KeyEvent.KEYCODE_MINUS -> {
+                            seekBy(-10000)
                             true
                         }
-                        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                            exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+
+                        KeyEvent.KEYCODE_DPAD_RIGHT,
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                        KeyEvent.KEYCODE_EQUALS -> {
+                            seekBy(10000)
                             true
                         }
-                        KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                            exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
+
+                        KeyEvent.KEYCODE_SPACE,
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                            togglePlayPause()
                             true
                         }
-                        KeyEvent.KEYCODE_BACK -> {
+
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER -> {
+                            if (inIntro && introEnd != null) {
+                                skipIntro()
+                                true
+                            } else {
+                                togglePlayPause()
+                                true
+                            }
+                        }
+
+                        KeyEvent.KEYCODE_DPAD_UP,
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            showControls = true
+                            controlsResetTrigger++
+                            true
+                        }
+
+                        KeyEvent.KEYCODE_BACK,
+                        KeyEvent.KEYCODE_ESCAPE -> {
                             // Save progress before leaving
                             scope.launch {
                                 repository.updateProgress(
@@ -200,6 +261,7 @@ fun PlayerScreen(
                             onClose()
                             true
                         }
+
                         else -> false
                     }
                 } else false
@@ -209,35 +271,41 @@ fun PlayerScreen(
             focusRequester.requestFocus()
         }
 
-        // ExoPlayer View
+        // ExoPlayer View (explicitly non-focusable so Compose keeps remote D-pad focus)
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = exoPlayer
-                    useController = false // Custom Compose TV D-Pad Overlay
+                    useController = false
+                    isFocusable = false
+                    isFocusableInTouchMode = false
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // "Skip Intro" Button overlay
+        // "Skip Intro" Banner overlay
         if (inIntro && introEnd != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 100.dp, end = 48.dp)
+                    .padding(bottom = 120.dp, end = 48.dp)
             ) {
                 Button(
-                    onClick = {
-                        exoPlayer.seekTo((introEnd * 1000).toLong())
-                    },
+                    onClick = { skipIntro() },
                     colors = ButtonDefaults.colors(
                         containerColor = RoyalBlue,
                         focusedContainerColor = BrightBlue
                     ),
-                    shape = ButtonDefaults.shape(RoundedCornerShape(6.dp))
+                    shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
                 ) {
-                    Text(text = "⏭  Skip Intro", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(
+                        text = "⏭  Skip Intro  [Press Enter / OK]",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
                 }
             }
         }
@@ -255,9 +323,9 @@ fun PlayerScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.7f),
+                                Color.Black.copy(alpha = 0.75f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.85f)
+                                Color.Black.copy(alpha = 0.9f)
                             )
                         )
                     )
@@ -274,14 +342,15 @@ fun PlayerScreen(
                     Column {
                         Text(
                             text = mediaItem.title,
-                            fontSize = 20.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         episode?.let { ep ->
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "S${ep.seasonNumber}:E${ep.episodeNumber} \"${ep.title}\"",
-                                fontSize = 13.sp,
+                                text = "Season ${ep.seasonNumber} • Episode ${ep.episodeNumber}: \"${ep.title}\"",
+                                fontSize = 14.sp,
                                 color = Color.LightGray
                             )
                         }
@@ -302,9 +371,10 @@ fun PlayerScreen(
                         colors = ButtonDefaults.colors(
                             containerColor = Color.White.copy(alpha = 0.15f),
                             focusedContainerColor = BrightBlue
-                        )
+                        ),
+                        shape = ButtonDefaults.shape(RoundedCornerShape(6.dp))
                     ) {
-                        Text("✕ Exit", fontSize = 12.sp, color = Color.White)
+                        Text("✕ Exit [Esc]", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -322,18 +392,18 @@ fun PlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
-                            .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(3.dp))
+                            .height(8.dp)
+                            .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(progressFraction)
-                                .height(6.dp)
-                                .background(RoyalBlue, RoundedCornerShape(3.dp))
+                                .height(8.dp)
+                                .background(BrightBlue, RoundedCornerShape(4.dp))
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -342,23 +412,77 @@ fun PlayerScreen(
                     ) {
                         Text(
                             text = formatTime(currentPositionMs),
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             color = Color.White,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         )
 
-                        // D-Pad Helper Hints
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text("◀ -10s", fontSize = 11.sp, color = Color.LightGray)
-                            Text(if (isPlaying) "⏸ Pause" else "▶ Play", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                            Text("▶ +10s", fontSize = 11.sp, color = Color.LightGray)
+                        // Interactive / D-Pad Transport Controls
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = { seekBy(-10000) },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.12f),
+                                    focusedContainerColor = BrightBlue
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text("⏪ -10s [◀]", fontSize = 12.sp, color = Color.White)
+                            }
+
+                            Button(
+                                onClick = { togglePlayPause() },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = RoyalBlue,
+                                    focusedContainerColor = BrightBlue
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    if (isPlaying) "⏸ Pause" else "▶ Play",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+
+                            Button(
+                                onClick = { seekBy(10000) },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.12f),
+                                    focusedContainerColor = BrightBlue
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text("⏩ +10s [▶]", fontSize = 12.sp, color = Color.White)
+                            }
+
+                            if (introEnd != null) {
+                                Button(
+                                    onClick = { skipIntro() },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = Color.White.copy(alpha = 0.12f),
+                                        focusedContainerColor = BrightBlue
+                                    ),
+                                    shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Text("⏭ Skip Intro", fontSize = 12.sp, color = Color.White)
+                                }
+                            }
                         }
 
                         Text(
                             text = formatTime(durationMs),
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             color = Color.LightGray,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
