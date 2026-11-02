@@ -22,7 +22,7 @@ interface OwnFlixApiService {
     @GET("api/profiles")
     suspend fun getProfiles(): Response<ProfilesResponse>
 
-    @POST("api/profiles/verify-password")
+    @POST("api/profiles/auth")
     suspend fun verifyProfilePassword(
         @Body request: VerifyPasswordRequest
     ): Response<VerifyPasswordResponse>
