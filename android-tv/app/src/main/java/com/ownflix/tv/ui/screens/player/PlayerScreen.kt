@@ -6,7 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -30,12 +32,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,10 +49,12 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
+import com.ownflix.tv.MainActivity
 import com.ownflix.tv.data.model.Episode
 import com.ownflix.tv.data.model.MediaItem
 import com.ownflix.tv.data.repository.OwnFlixRepository
 import com.ownflix.tv.ui.theme.BrightBlue
+import com.ownflix.tv.ui.theme.DangerRed
 import com.ownflix.tv.ui.theme.RoyalBlue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -77,8 +80,15 @@ fun PlayerScreen(
     var durationMs by remember { mutableLongStateOf(0L) }
     var showControls by remember { mutableStateOf(true) }
     var controlsResetTrigger by remember { mutableStateOf(0) }
+    var seekFeedbackText by remember { mutableStateOf<String?>(null) }
+    var isMarkedForDeletion by remember { mutableStateOf(mediaItem.markedForDeletion) }
 
-    val focusRequester = remember { FocusRequester() }
+    // Intro detection
+    val introStart = episode?.introStart ?: mediaItem.introStart
+    val introEnd = episode?.introEnd ?: mediaItem.introEnd
+    val inIntro = introStart != null && introEnd != null &&
+            (currentPositionMs / 1000.0) >= introStart &&
+            (currentPositionMs / 1000.0) <= introEnd
 
     // Create ExoPlayer instance
     val exoPlayer = remember {
@@ -97,29 +107,37 @@ fun PlayerScreen(
         }
     }
 
-    // Seek helper that immediately reflects on UI
+    // Save and exit helper
+    fun handleExit() {
+        scope.launch {
+            repository.updateProgress(
+                mediaItemId = mediaItem.id,
+                positionSeconds = (exoPlayer.currentPosition / 1000.0),
+                durationSeconds = (exoPlayer.duration / 1000.0),
+                episodeId = episode?.id
+            )
+        }
+        onClose()
+    }
+
+    // Seek helper that immediately updates both ExoPlayer and Compose UI
     fun seekBy(deltaMs: Long) {
         val dur = exoPlayer.duration.coerceAtLeast(0L)
         val maxPos = if (dur > 0) dur else Long.MAX_VALUE
-        val newPos = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, maxPos)
-        exoPlayer.seekTo(newPos)
-        currentPositionMs = newPos
+        val targetPos = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, maxPos)
+        exoPlayer.seekTo(targetPos)
+        currentPositionMs = targetPos
+        seekFeedbackText = if (deltaMs > 0) "+10s" else "-10s"
         showControls = true
         controlsResetTrigger++
     }
-
-    // Intro detection
-    val introStart = episode?.introStart ?: mediaItem.introStart
-    val introEnd = episode?.introEnd ?: mediaItem.introEnd
-    val inIntro = introStart != null && introEnd != null &&
-            (currentPositionMs / 1000.0) >= introStart &&
-            (currentPositionMs / 1000.0) <= introEnd
 
     fun skipIntro() {
         if (introEnd != null) {
             val targetMs = (introEnd * 1000).toLong()
             exoPlayer.seekTo(targetMs)
             currentPositionMs = targetMs
+            seekFeedbackText = "⏭ Intro Skipped"
             showControls = true
             controlsResetTrigger++
         }
@@ -137,7 +155,76 @@ fun PlayerScreen(
         controlsResetTrigger++
     }
 
-    // Listen to player events
+    // Register active global Activity key handler to guarantee 100% remote reliability
+    DisposableEffect(Unit) {
+        MainActivity.activePlayerKeyHandler = { event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT,
+                    KeyEvent.KEYCODE_MEDIA_REWIND,
+                    KeyEvent.KEYCODE_MINUS,
+                    KeyEvent.KEYCODE_J -> {
+                        seekBy(-10000)
+                        true
+                    }
+
+                    KeyEvent.KEYCODE_DPAD_RIGHT,
+                    KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                    KeyEvent.KEYCODE_EQUALS,
+                    KeyEvent.KEYCODE_L -> {
+                        seekBy(10000)
+                        true
+                    }
+
+                    KeyEvent.KEYCODE_SPACE,
+                    KeyEvent.KEYCODE_K,
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                        togglePlayPause()
+                        true
+                    }
+
+                    KeyEvent.KEYCODE_DPAD_CENTER,
+                    KeyEvent.KEYCODE_ENTER -> {
+                        if (inIntro && introEnd != null) {
+                            skipIntro()
+                            true
+                        } else {
+                            togglePlayPause()
+                            true
+                        }
+                    }
+
+                    KeyEvent.KEYCODE_S -> {
+                        if (introEnd != null) {
+                            skipIntro()
+                            true
+                        } else false
+                    }
+
+                    KeyEvent.KEYCODE_DPAD_UP,
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        showControls = true
+                        controlsResetTrigger++
+                        true
+                    }
+
+                    KeyEvent.KEYCODE_BACK,
+                    KeyEvent.KEYCODE_ESCAPE -> {
+                        handleExit()
+                        true
+                    }
+
+                    else -> false
+                }
+            } else false
+        }
+
+        onDispose {
+            MainActivity.activePlayerKeyHandler = null
+        }
+    }
+
+    // Listen to player state
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
@@ -192,6 +279,14 @@ fun PlayerScreen(
         }
     }
 
+    // Clear seek feedback bubble after 1.2 seconds
+    LaunchedEffect(seekFeedbackText) {
+        if (seekFeedbackText != null) {
+            delay(1200)
+            seekFeedbackText = null
+        }
+    }
+
     // Auto-hide controls after 5 seconds of inactivity
     LaunchedEffect(showControls, controlsResetTrigger) {
         if (showControls) {
@@ -204,74 +299,8 @@ fun PlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .focusRequester(focusRequester)
-            .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (event.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_LEFT,
-                        KeyEvent.KEYCODE_MEDIA_REWIND,
-                        KeyEvent.KEYCODE_MINUS -> {
-                            seekBy(-10000)
-                            true
-                        }
-
-                        KeyEvent.KEYCODE_DPAD_RIGHT,
-                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
-                        KeyEvent.KEYCODE_EQUALS -> {
-                            seekBy(10000)
-                            true
-                        }
-
-                        KeyEvent.KEYCODE_SPACE,
-                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                            togglePlayPause()
-                            true
-                        }
-
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER -> {
-                            if (inIntro && introEnd != null) {
-                                skipIntro()
-                                true
-                            } else {
-                                togglePlayPause()
-                                true
-                            }
-                        }
-
-                        KeyEvent.KEYCODE_DPAD_UP,
-                        KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            showControls = true
-                            controlsResetTrigger++
-                            true
-                        }
-
-                        KeyEvent.KEYCODE_BACK,
-                        KeyEvent.KEYCODE_ESCAPE -> {
-                            // Save progress before leaving
-                            scope.launch {
-                                repository.updateProgress(
-                                    mediaItemId = mediaItem.id,
-                                    positionSeconds = (exoPlayer.currentPosition / 1000.0),
-                                    durationSeconds = (exoPlayer.duration / 1000.0),
-                                    episodeId = episode?.id
-                                )
-                            }
-                            onClose()
-                            true
-                        }
-
-                        else -> false
-                    }
-                } else false
-            }
     ) {
-        LaunchedEffect(Unit) {
-            focusRequester.requestFocus()
-        }
-
-        // ExoPlayer View (explicitly non-focusable so Compose keeps remote D-pad focus)
+        // ExoPlayer View (explicitly non-focusable so Compose controls keep focus)
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -284,7 +313,25 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // "Skip Intro" Banner overlay
+        // Center On-Screen Feedback Indicator (e.g. ⏪ -10s or ⏩ +10s)
+        seekFeedbackText?.let { feedback ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+                    .border(2.dp, BrightBlue, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 28.dp, vertical = 16.dp)
+            ) {
+                Text(
+                    text = feedback,
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // "Skip Intro" Banner overlay (matching Netflix Web Player)
         if (inIntro && introEnd != null) {
             Box(
                 modifier = Modifier
@@ -298,10 +345,10 @@ fun PlayerScreen(
                         focusedContainerColor = BrightBlue
                     ),
                     shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        text = "⏭  Skip Intro  [Press Enter / OK]",
+                        text = "⏭  Skip Intro  [Enter / S]",
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Color.White
@@ -310,7 +357,7 @@ fun PlayerScreen(
             }
         }
 
-        // TV Player Controls Overlay
+        // TV Player Controls Overlay (matches Netflix Web Player controls layout)
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn(),
@@ -323,15 +370,15 @@ fun PlayerScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.75f),
+                                Color.Black.copy(alpha = 0.82f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.9f)
+                                Color.Black.copy(alpha = 0.92f)
                             )
                         )
                     )
-                    .padding(horizontal = 48.dp, vertical = 28.dp)
+                    .padding(horizontal = 48.dp, vertical = 24.dp)
             ) {
-                // Top header: title and close
+                // Top Header: Back Button, Title, and Metadata
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -339,52 +386,59 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            text = mediaItem.title,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        episode?.let { ep ->
-                            Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Button(
+                            onClick = { handleExit() },
+                            colors = ButtonDefaults.colors(
+                                containerColor = Color.White.copy(alpha = 0.15f),
+                                focusedContainerColor = BrightBlue
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Text("← Back", fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        Column {
                             Text(
-                                text = "Season ${ep.seasonNumber} • Episode ${ep.episodeNumber}: \"${ep.title}\"",
-                                fontSize = 14.sp,
-                                color = Color.LightGray
+                                text = mediaItem.title,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
+                            episode?.let { ep ->
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Season ${ep.seasonNumber} • Episode ${ep.episodeNumber}: \"${ep.title}\"",
+                                    fontSize = 13.sp,
+                                    color = Color.LightGray
+                                )
+                            }
                         }
                     }
 
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                repository.updateProgress(
-                                    mediaItemId = mediaItem.id,
-                                    positionSeconds = (exoPlayer.currentPosition / 1000.0),
-                                    durationSeconds = (exoPlayer.duration / 1000.0),
-                                    episodeId = episode?.id
-                                )
-                            }
-                            onClose()
-                        },
-                        colors = ButtonDefaults.colors(
-                            containerColor = Color.White.copy(alpha = 0.15f),
-                            focusedContainerColor = BrightBlue
-                        ),
-                        shape = ButtonDefaults.shape(RoundedCornerShape(6.dp))
-                    ) {
-                        Text("✕ Exit [Esc]", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                    }
+                    // Format badge
+                    Text(
+                        text = mediaItem.resolution,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BrightBlue,
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
                 }
 
-                // Bottom Timeline & Transport
+                // Bottom Controls: Netflix-style Scrubber Seek Bar + Transport Control Buttons
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                 ) {
-                    // Timeline track
+                    // Full-width Netflix-style Seek Bar Track with circular Scrubber Knob
                     val progressFraction = if (durationMs > 0) {
                         (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                     } else 0f
@@ -392,98 +446,170 @@ fun PlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp)
-                            .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+                            .height(18.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
+                        // Background track
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color.White.copy(alpha = 0.25f))
+                        )
+
+                        // Filled active progress track
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(progressFraction)
-                                .height(8.dp)
-                                .background(BrightBlue, RoundedCornerShape(4.dp))
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(RoyalBlue)
                         )
+
+                        // Scrubber Knob Circle
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressFraction)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .align(Alignment.CenterEnd)
+                                    .clip(CircleShape)
+                                    .background(BrightBlue)
+                                    .border(2.dp, Color.White, CircleShape)
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
+                    // Row with Left Time, Transport Buttons, Right Time
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = formatTime(currentPositionMs),
-                            fontSize = 14.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        // Interactive / D-Pad Transport Controls
+                        // Current time / Total time (matching web player)
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = formatTime(currentPositionMs),
+                                fontSize = 15.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "/",
+                                fontSize = 13.sp,
+                                color = Color.Gray
+                            )
+                            Text(
+                                text = formatTime(durationMs),
+                                fontSize = 14.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = Color.LightGray
+                            )
+                        }
+
+                        // Web Player-style Transport Controls Row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Button(
-                                onClick = { seekBy(-10000) },
-                                colors = ButtonDefaults.colors(
-                                    containerColor = Color.White.copy(alpha = 0.12f),
-                                    focusedContainerColor = BrightBlue
-                                ),
-                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Text("⏪ -10s [◀]", fontSize = 12.sp, color = Color.White)
-                            }
-
+                            // Play / Pause Button
                             Button(
                                 onClick = { togglePlayPause() },
                                 colors = ButtonDefaults.colors(
                                     containerColor = RoyalBlue,
                                     focusedContainerColor = BrightBlue
                                 ),
-                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
-                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)
+                                shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    if (isPlaying) "⏸ Pause" else "▶ Play",
-                                    fontSize = 13.sp,
+                                    text = if (isPlaying) "⏸ Pause" else "▶ Play",
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
                             }
 
+                            // Rewind 10s Button
+                            Button(
+                                onClick = { seekBy(-10000) },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.12f),
+                                    focusedContainerColor = BrightBlue
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Text("↺ 10s [◀]", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            // Forward 10s Button
                             Button(
                                 onClick = { seekBy(10000) },
                                 colors = ButtonDefaults.colors(
                                     containerColor = Color.White.copy(alpha = 0.12f),
                                     focusedContainerColor = BrightBlue
                                 ),
-                                shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                             ) {
-                                Text("⏩ +10s [▶]", fontSize = 12.sp, color = Color.White)
+                                Text("↻ 10s [▶]", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
                             }
 
+                            // Skip Intro Button (when available)
                             if (introEnd != null) {
                                 Button(
                                     onClick = { skipIntro() },
                                     colors = ButtonDefaults.colors(
-                                        containerColor = Color.White.copy(alpha = 0.12f),
+                                        containerColor = if (inIntro) RoyalBlue else Color.White.copy(alpha = 0.12f),
                                         focusedContainerColor = BrightBlue
                                     ),
-                                    shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                    shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
-                                    Text("⏭ Skip Intro", fontSize = 12.sp, color = Color.White)
+                                    Text("⏭ Skip Intro", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
                                 }
+                            }
+
+                            // Mark for Deletion Button
+                            Button(
+                                onClick = {
+                                    val nextState = !isMarkedForDeletion
+                                    isMarkedForDeletion = nextState
+                                    scope.launch {
+                                        repository.markForDeletion(mediaItem.id, nextState)
+                                    }
+                                },
+                                colors = ButtonDefaults.colors(
+                                    containerColor = if (isMarkedForDeletion) DangerRed else Color.White.copy(alpha = 0.12f),
+                                    focusedContainerColor = if (isMarkedForDeletion) DangerRed.copy(alpha = 0.8f) else BrightBlue
+                                ),
+                                shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (isMarkedForDeletion) "🗑 Marked for Deletion" else "🗑 Mark for Deletion",
+                                    fontSize = 12.sp,
+                                    color = Color.White
+                                )
                             }
                         }
 
-                        Text(
-                            text = formatTime(durationMs),
-                            fontSize = 14.sp,
-                            color = Color.LightGray,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        // D-Pad navigation shortcuts legend
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("◀ / ▶ Seek", fontSize = 11.sp, color = Color.Gray)
+                            Text("Space/OK Play", fontSize = 11.sp, color = Color.Gray)
+                            Text("Esc Exit", fontSize = 11.sp, color = Color.Gray)
+                        }
                     }
                 }
             }

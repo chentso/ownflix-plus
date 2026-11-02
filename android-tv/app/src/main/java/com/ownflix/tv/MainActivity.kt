@@ -21,7 +21,20 @@ import com.ownflix.tv.ui.screens.search.SearchScreen
 import com.ownflix.tv.ui.screens.server.ServerConnectScreen
 import com.ownflix.tv.ui.theme.OwnFlixTvTheme
 
+import android.view.KeyEvent
+
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        var activePlayerKeyHandler: ((KeyEvent) -> Boolean)? = null
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (activePlayerKeyHandler?.invoke(event) == true) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
