@@ -75,7 +75,10 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ media: formatted });
+  return NextResponse.json({
+    media: formatted,
+    items: formatted,
+  });
 }
 
 export async function POST(req: NextRequest) {
