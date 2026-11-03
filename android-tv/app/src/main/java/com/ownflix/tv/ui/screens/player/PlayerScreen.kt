@@ -81,7 +81,6 @@ fun PlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var controlsResetTrigger by remember { mutableStateOf(0) }
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
-    var isMarkedForDeletion by remember { mutableStateOf(mediaItem.markedForDeletion) }
 
     // Intro detection
     val introStart = episode?.introStart ?: mediaItem.introStart
@@ -578,29 +577,6 @@ fun PlayerScreen(
                                 ) {
                                     Text("⏭ Skip Intro", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
                                 }
-                            }
-
-                            // Mark for Deletion Button
-                            Button(
-                                onClick = {
-                                    val nextState = !isMarkedForDeletion
-                                    isMarkedForDeletion = nextState
-                                    scope.launch {
-                                        repository.markForDeletion(mediaItem.id, nextState)
-                                    }
-                                },
-                                colors = ButtonDefaults.colors(
-                                    containerColor = if (isMarkedForDeletion) DangerRed else Color.White.copy(alpha = 0.12f),
-                                    focusedContainerColor = if (isMarkedForDeletion) DangerRed.copy(alpha = 0.8f) else BrightBlue
-                                ),
-                                shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = if (isMarkedForDeletion) "🗑 Marked for Deletion" else "🗑 Mark for Deletion",
-                                    fontSize = 12.sp,
-                                    color = Color.White
-                                )
                             }
                         }
 
