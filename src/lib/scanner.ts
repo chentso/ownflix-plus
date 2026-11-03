@@ -4,6 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { prisma } from "./prisma";
 import { fetchImdbMetadata } from "./imdb";
+import { fetchTvdbEpisode } from "./tvdb";
 import { computeFileSignature, detectVideoIntro } from "./introDetector";
 
 const execFileAsync = promisify(execFile);
@@ -417,6 +418,30 @@ export async function scanLibraryFolder(folderId: string): Promise<{
           });
         }
 
+        // TVDB Enrichment: Check if episode has placeholder metadata and enrich with official TVDB data
+        if (
+          existingEp.title.startsWith("Episode ") ||
+          existingEp.overview.startsWith("Local file:") ||
+          !existingEp.thumbnailUrl ||
+          existingEp.thumbnailUrl === series.backdropUrl
+        ) {
+          const tvdbEp = await fetchTvdbEpisode(
+            series.title,
+            seasonNum,
+            episodeNum
+          );
+          if (tvdbEp) {
+            await prisma.episode.update({
+              where: { id: existingEp.id },
+              data: {
+                title: tvdbEp.title || existingEp.title,
+                overview: tvdbEp.overview || existingEp.overview,
+                thumbnailUrl: tvdbEp.thumbnailUrl || existingEp.thumbnailUrl,
+              },
+            });
+          }
+        }
+
         // Caching: Only re-process if the video file has completely changed on disk
         const fileHasChanged =
           !existingEp.fileSignature || existingEp.fileSignature !== currentSig;
@@ -449,8 +474,14 @@ export async function scanLibraryFolder(folderId: string): Promise<{
         }
         // If fileHasChanged === false: file is identical, skip all intro processing
       } else {
-        // New episode detected: probe media and run smart intro detection
+        // New episode detected: probe media, fetch TVDB metadata, and run intro detection
         const probe = await probeMediaFile(filePath);
+        const tvdbEp = await fetchTvdbEpisode(
+          series.title,
+          seasonNum,
+          episodeNum
+        );
+
         const siblingPaths = videoFiles.filter(
           (p) =>
             p !== filePath &&
@@ -464,14 +495,21 @@ export async function scanLibraryFolder(folderId: string): Promise<{
           siblingEpisodeFilePaths: siblingPaths,
         });
 
+        const epTitle =
+          tvdbEp?.title || parsed.episodeTitle || `Episode ${episodeNum}`;
+        const epOverview =
+          tvdbEp?.overview || `Local file: ${fileName} (${probe.resolution})`;
+        const epThumb =
+          tvdbEp?.thumbnailUrl || series.backdropUrl || defaultBackdrop;
+
         const epCreated = await prisma.episode.create({
           data: {
             mediaItemId: series.id,
             seasonNumber: seasonNum,
             episodeNumber: episodeNum,
-            title: parsed.episodeTitle || `Episode ${episodeNum}`,
-            overview: `Local file: ${fileName} (${probe.resolution})`,
-            thumbnailUrl: series.backdropUrl || defaultBackdrop,
+            title: epTitle,
+            overview: epOverview,
+            thumbnailUrl: epThumb,
             videoUrl: "",
             filePath,
             fileSignature: currentSig,
