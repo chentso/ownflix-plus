@@ -3,6 +3,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MediaItem, Episode, Profile } from "@/types/ownflix";
 import { WatchRoom, WatchTogetherMode, RoomChatMessage } from "@/lib/rooms";
+import {
+  SubtitleSettings,
+  DEFAULT_SUBTITLE_SETTINGS,
+  getSubtitleTextStyle,
+  getSubtitleContainerStyle,
+} from "@/types/subtitles";
+import SubtitleSettingsModal from "./SubtitleSettingsModal";
 import { renderProfileIcon } from "./ProfileGate";
 import {
   ArrowLeft,
@@ -652,6 +659,47 @@ export default function NetflixPlayer({
 
   const effectiveQuality: EffectiveQuality =
     qualityMode === "auto" ? autoEffectiveQuality : qualityMode;
+
+  // Subtitle Appearance Customization State
+  const [subtitleSettings, setSubtitleSettings] = useState<SubtitleSettings>(
+    () => {
+      if (typeof window !== "undefined") {
+        try {
+          const profileKey = activeProfile?.id
+            ? `ownflix_subtitle_settings_${activeProfile.id}`
+            : "ownflix_subtitle_settings";
+          const saved =
+            window.localStorage.getItem(profileKey) ||
+            window.localStorage.getItem("ownflix_subtitle_settings");
+          if (saved) {
+            return { ...DEFAULT_SUBTITLE_SETTINGS, ...JSON.parse(saved) };
+          }
+        } catch {}
+      }
+      return DEFAULT_SUBTITLE_SETTINGS;
+    }
+  );
+  const [subtitleSettingsModalOpen, setSubtitleSettingsModalOpen] =
+    useState(false);
+
+  const handleUpdateSubtitleSettings = useCallback(
+    (newSettings: SubtitleSettings) => {
+      setSubtitleSettings(newSettings);
+      if (typeof window !== "undefined") {
+        try {
+          const json = JSON.stringify(newSettings);
+          window.localStorage.setItem("ownflix_subtitle_settings", json);
+          if (activeProfile?.id) {
+            window.localStorage.setItem(
+              `ownflix_subtitle_settings_${activeProfile.id}`,
+              json
+            );
+          }
+        } catch {}
+      }
+    },
+    [activeProfile?.id]
+  );
 
   const activeFilePath = currentEpisode?.filePath || item.filePath || null;
   const isLocalFile = Boolean(activeFilePath);
@@ -1964,8 +2012,14 @@ export default function NetflixPlayer({
 
       {/* Active Subtitle Overlay */}
       {activeCue && (
-        <div className="relative z-10 mt-auto mb-32 px-6 text-center pointer-events-none">
-          <span className="inline-block bg-black/75 text-white text-base sm:text-xl md:text-2xl font-medium px-4 py-1.5 rounded shadow-lg whitespace-pre-line leading-snug">
+        <div
+          style={getSubtitleContainerStyle(subtitleSettings, showControls)}
+          className="pointer-events-none"
+        >
+          <span
+            style={getSubtitleTextStyle(subtitleSettings)}
+            className="inline-block whitespace-pre-line shadow-lg font-medium"
+          >
             {activeCue.text}
           </span>
         </div>
@@ -2369,9 +2423,20 @@ export default function NetflixPlayer({
           </div>
 
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
-              Subtitles
-            </h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Subtitles
+              </h4>
+              <button
+                type="button"
+                onClick={() => setSubtitleSettingsModalOpen(true)}
+                className="text-[11px] font-semibold text-[#3B82F6] hover:text-blue-400 flex items-center gap-1 hover:underline transition-colors"
+                title="Configure font size, color, background, and position"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                <span>Appearance</span>
+              </button>
+            </div>
             <div className="space-y-1.5">
               {subtitleOptions.map((sub) => (
                 <button
@@ -2392,6 +2457,19 @@ export default function NetflixPlayer({
                 </button>
               ))}
             </div>
+
+            {selectedSubtitle !== "Off" && (
+              <div className="pt-2.5 mt-2.5 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setSubtitleSettingsModalOpen(true)}
+                  className="w-full text-center text-xs py-1.5 px-2 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center gap-1.5 transition-colors border border-zinc-700/60"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#3B82F6]" />
+                  <span>Subtitle Appearance</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3481,6 +3559,15 @@ export default function NetflixPlayer({
             className="max-w-full max-h-full rounded-lg shadow-2xl border border-zinc-800 object-contain"
           />
         </div>
+      )}
+
+      {/* Subtitle Appearance Settings Modal */}
+      {subtitleSettingsModalOpen && (
+        <SubtitleSettingsModal
+          settings={subtitleSettings}
+          onUpdateSettings={handleUpdateSubtitleSettings}
+          onClose={() => setSubtitleSettingsModalOpen(false)}
+        />
       )}
     </div>
   );
