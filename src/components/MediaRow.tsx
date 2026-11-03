@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useEffect } from "react";
 import { MediaItem } from "@/types/ownflix";
 import {
   Play,
@@ -24,6 +24,9 @@ interface MediaRowProps {
   onToggleMyList: (item: MediaItem) => void;
   onRemoveContinueWatching?: (item: MediaItem) => void;
   onOpenContextMenu?: (item: MediaItem, x: number, y: number) => void;
+  rowIndex?: number;
+  focusedItemIndex?: number | null;
+  isTvMode?: boolean;
 }
 
 function formatDuration(sec: number): string {
@@ -45,8 +48,24 @@ export default function MediaRow({
   onToggleMyList,
   onRemoveContinueWatching,
   onOpenContextMenu,
+  rowIndex = 0,
+  focusedItemIndex = null,
+  isTvMode = false,
 }: MediaRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isTvMode && focusedItemIndex !== null && focusedItemIndex !== undefined) {
+      const cardEl = document.getElementById(`tv-card-${rowIndex}-${focusedItemIndex}`);
+      if (cardEl) {
+        cardEl.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      }
+    }
+  }, [focusedItemIndex, isTvMode, rowIndex]);
 
   if (items.length === 0) return null;
 
@@ -87,7 +106,8 @@ export default function MediaRow({
           ref={rowRef}
           className="flex items-stretch gap-3 md:gap-4 overflow-x-auto no-scrollbar px-4 md:px-12 py-3 scroll-smooth"
         >
-          {items.map((item) => {
+          {items.map((item, idx) => {
+            const isFocused = isTvMode && focusedItemIndex === idx;
             const progressPct =
               item.progress && item.progress.durationSeconds > 0
                 ? Math.min(
@@ -106,6 +126,7 @@ export default function MediaRow({
             return (
               <div
                 key={item.id}
+                id={`tv-card-${rowIndex}-${idx}`}
                 onContextMenu={(e) => {
                   if (onOpenContextMenu) {
                     e.preventDefault();
@@ -113,7 +134,11 @@ export default function MediaRow({
                     onOpenContextMenu(item, e.clientX, e.clientY);
                   }
                 }}
-                className="group/card relative shrink-0 w-[165px] sm:w-[190px] md:w-[215px] rounded-md bg-[#181818] transition-all duration-300 hover:scale-105 hover:z-20 shadow-md hover:shadow-2xl overflow-hidden border border-zinc-800/70 hover:border-zinc-600 flex flex-col"
+                className={`group/card relative shrink-0 w-[165px] sm:w-[190px] md:w-[215px] rounded-md bg-[#181818] transition-all duration-200 overflow-hidden border flex flex-col ${
+                  isFocused
+                    ? "ring-4 ring-[#2563EB] border-[#3B82F6] scale-105 z-30 shadow-[0_0_35px_rgba(37,99,235,0.95)] brightness-110"
+                    : "border-zinc-800/70 hover:scale-105 hover:z-20 hover:border-zinc-600 shadow-md hover:shadow-2xl"
+                }`}
               >
                 {/* 2:3 Vertical Poster Area */}
                 <div
@@ -127,6 +152,13 @@ export default function MediaRow({
                     className="w-full h-full object-cover object-center group-hover/card:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-black/25 opacity-90" />
+
+                  {isFocused && (
+                    <div className="absolute top-2.5 right-2.5 z-30 bg-[#2563EB] text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded shadow-[0_0_15px_rgba(37,99,235,1)] flex items-center gap-1 animate-pulse">
+                      <Play className="w-2.5 h-2.5 fill-white" />
+                      <span>Enter to Play</span>
+                    </div>
+                  )}
 
                   {item.markedForDeletion && (
                     <div

@@ -11,6 +11,7 @@ import {
   KeyRound,
   Lock,
   Activity,
+  Tv,
 } from "lucide-react";
 
 export type NavCategory = "HOME" | "SERIES" | "MOVIES" | "LOCAL" | "MY_LIST" | "PLAYLISTS";
@@ -26,6 +27,9 @@ interface NavbarProps {
   onManageProfiles: () => void;
   onOpenAccountSettings: () => void;
   onOpenAdmin: (tab?: "profiles" | "activity" | "folders" | "media") => void;
+  isTvMode?: boolean;
+  onToggleTvMode?: () => void;
+  focusedNavIndex?: number | null;
 }
 
 export default function Navbar({
@@ -39,6 +43,9 @@ export default function Navbar({
   onManageProfiles,
   onOpenAccountSettings,
   onOpenAdmin,
+  isTvMode = false,
+  onToggleTvMode,
+  focusedNavIndex = null,
 }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -95,14 +102,17 @@ export default function Navbar({
             onSelectCategory("HOME");
             onSearchChange("");
           }}
-          className="text-[#2563EB] font-black text-2xl md:text-3xl tracking-tighter focus:outline-none hover:opacity-90 transition-opacity"
+          className={`text-[#2563EB] font-black text-2xl md:text-3xl tracking-tighter focus:outline-none hover:opacity-90 transition-all rounded px-1.5 py-0.5 ${
+            focusedNavIndex === 0 ? "ring-4 ring-[#2563EB] bg-[#2563EB]/20 shadow-[0_0_20px_rgba(37,99,235,0.8)] scale-105" : ""
+          }`}
         >
           OWNFLIX+
         </button>
 
         <nav className="hidden md:flex items-center gap-5 text-sm">
-          {navItems.map((item) => {
+          {navItems.map((item, idx) => {
             const isActive = activeCategory === item.id && !searchQuery;
+            const isFocused = focusedNavIndex === idx + 1;
             return (
               <button
                 key={item.id}
@@ -110,8 +120,10 @@ export default function Navbar({
                   onSelectCategory(item.id);
                   onSearchChange("");
                 }}
-                className={`transition-colors ${
-                  isActive
+                className={`transition-all rounded px-2.5 py-1 ${
+                  isFocused
+                    ? "ring-4 ring-[#2563EB] bg-[#2563EB] text-white font-bold shadow-[0_0_20px_rgba(37,99,235,0.8)] scale-105"
+                    : isActive
                     ? "text-white font-semibold"
                     : "text-zinc-300 hover:text-zinc-100 font-normal"
                 }`}
@@ -123,14 +135,41 @@ export default function Navbar({
         </nav>
       </div>
 
-      {/* Right: Search, Library Manager, Profile Menu */}
-      <div className="flex items-center gap-3 md:gap-5">
+      {/* Right: TV Mode Toggle, Search, Profile Menu */}
+      <div className="flex items-center gap-3 md:gap-4">
+        {/* TV Mode Toggle Button */}
+        {onToggleTvMode && (
+          <button
+            type="button"
+            onClick={onToggleTvMode}
+            title={isTvMode ? "Exit TV Mode (Esc / T)" : "Enter TV Mode (T)"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              isTvMode
+                ? "bg-[#2563EB] text-white shadow-[0_0_20px_rgba(37,99,235,0.9)] ring-2 ring-white/80"
+                : "bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/70"
+            } ${
+              focusedNavIndex === 7
+                ? "ring-4 ring-[#2563EB] scale-110 shadow-[0_0_25px_rgba(37,99,235,1)]"
+                : ""
+            }`}
+          >
+            <Tv className={`w-3.5 h-3.5 ${isTvMode ? "text-white animate-pulse" : "text-[#3B82F6]"}`} />
+            <span className="hidden sm:inline font-bold">
+              {isTvMode ? "TV Mode: ON" : "TV Mode"}
+            </span>
+          </button>
+        )}
+
         {/* Expandable Netflix Search Box */}
         <div
           className={`flex items-center transition-all duration-200 ${
             searchOpen || searchQuery
               ? "bg-black/85 border border-white/80 px-2.5 py-1.5 w-48 md:w-64"
               : "w-8 justify-center"
+          } ${
+            focusedNavIndex === 6
+              ? "ring-4 ring-[#2563EB] rounded scale-105 shadow-[0_0_20px_rgba(37,99,235,0.8)]"
+              : ""
           }`}
         >
           <button
@@ -178,7 +217,11 @@ export default function Navbar({
         >
           <button
             onClick={() => setDropdownOpen((o) => !o)}
-            className="flex items-center gap-2 focus:outline-none py-1"
+            className={`flex items-center gap-2 focus:outline-none py-1 rounded-md px-1 transition-all ${
+              focusedNavIndex === 8
+                ? "ring-4 ring-[#2563EB] bg-[#2563EB]/25 scale-105 shadow-[0_0_20px_rgba(37,99,235,0.8)]"
+                : ""
+            }`}
           >
             <div
               className="w-8 h-8 rounded flex items-center justify-center shadow-md relative"

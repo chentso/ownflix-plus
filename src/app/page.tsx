@@ -32,6 +32,7 @@ import {
   ListPlus,
   Trash2,
   AlertTriangle,
+  Tv,
 } from "lucide-react";
 
 export default function OwnFlixApp() {
@@ -82,6 +83,34 @@ export default function OwnFlixApp() {
   const [showSwitchPass, setShowSwitchPass] = useState(false);
 
   const [knownProfileIds, setKnownProfileIds] = useState<string[]>([]);
+
+  // 10-foot TV Mode & Spatial Navigation State
+  const [isTvMode, setIsTvMode] = useState(false);
+  const [tvSection, setTvSection] = useState<"navbar" | "hero" | "rows">("hero");
+  const [tvNavIndex, setTvNavIndex] = useState(1); // 1 = Home
+  const [tvHeroBtnIndex, setTvHeroBtnIndex] = useState(0); // 0 = Play
+  const [tvRowIndex, setTvRowIndex] = useState(0);
+  const [tvItemIndex, setTvItemIndex] = useState(0);
+
+  // Restore TV Mode preference from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("ownflix_tv_mode");
+      if (saved === "true") {
+        setIsTvMode(true);
+      }
+    }
+  }, []);
+
+  const toggleTvMode = useCallback(() => {
+    setIsTvMode((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("ownflix_tv_mode", next ? "true" : "false");
+      }
+      return next;
+    });
+  }, []);
 
   const handleSelectProfile = useCallback((profile: Profile | null) => {
     setActiveProfile(profile);
@@ -551,6 +580,329 @@ export default function OwnFlixApp() {
     [profileFilteredMedia]
   );
 
+  const activeRows = useMemo(() => {
+    const rows: {
+      id: string;
+      title: string;
+      subtitle?: string;
+      items: MediaItem[];
+      isContinueWatching?: boolean;
+    }[] = [];
+
+    if (continueWatchingItems.length > 0) {
+      rows.push({
+        id: "continue-watching",
+        title: `Continue Watching for ${activeProfile?.name || "You"}`,
+        items: continueWatchingItems,
+        isContinueWatching: true,
+      });
+    }
+
+    if (seriesItems.length > 0 && activeCategory !== "MOVIES") {
+      rows.push({
+        id: "tv-shows",
+        title: "TV Shows",
+        subtitle: "Multi-Episode Auto-Play & Skip Intro",
+        items: seriesItems,
+      });
+    }
+
+    if (movieItems.length > 0 && activeCategory !== "SERIES") {
+      rows.push({
+        id: "movies",
+        title: "Movies",
+        subtitle: "Direct HTTP 206 Range & Live Streaming",
+        items: movieItems,
+      });
+    }
+
+    if (myListItems.length > 0) {
+      rows.push({
+        id: "my-list",
+        title: "My List",
+        items: myListItems,
+      });
+    }
+
+    if (comedyItems.length > 0) {
+      rows.push({
+        id: "comedy",
+        title: "Comedy & Satire",
+        items: comedyItems,
+      });
+    }
+
+    if (sciFiItems.length > 0) {
+      rows.push({
+        id: "scifi",
+        title: "Sci-Fi & Cyberpunk Worlds",
+        items: sciFiItems,
+      });
+    }
+
+    if (actionItems.length > 0) {
+      rows.push({
+        id: "action",
+        title: "High-Octane Action & Thrillers",
+        items: actionItems,
+      });
+    }
+
+    return rows;
+  }, [
+    continueWatchingItems,
+    seriesItems,
+    movieItems,
+    myListItems,
+    comedyItems,
+    sciFiItems,
+    actionItems,
+    activeProfile,
+    activeCategory,
+  ]);
+
+  // 10-foot TV Mode spatial navigation keyboard listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      // 'T' / 't' key toggles TV Mode when not typing in an input
+      if (
+        (e.key === "t" || e.key === "T") &&
+        !isInput &&
+        !playingState &&
+        !detailItem &&
+        !accountModalOpen &&
+        !adminModal.open
+      ) {
+        e.preventDefault();
+        toggleTvMode();
+        return;
+      }
+
+      // If TV Mode is NOT active, or playing video, or in input, ignore spatial navigation
+      if (!isTvMode || isInput || playingState) return;
+
+      // Escape key: exit TV Mode (or close detail if open)
+      if (e.key === "Escape") {
+        if (detailItem) {
+          setDetailItem(null);
+          return;
+        }
+        e.preventDefault();
+        setIsTvMode(false);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("ownflix_tv_mode", "false");
+        }
+        return;
+      }
+
+      // If any overlay modal is open, avoid background navigation
+      if (
+        detailItem ||
+        accountModalOpen ||
+        adminModal.open ||
+        identifyItem ||
+        pendingSwitchProfile
+      ) {
+        return;
+      }
+
+      // ArrowUp
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (tvSection === "hero") {
+          setTvSection("navbar");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (tvSection === "rows") {
+          if (tvRowIndex > 0) {
+            const nextRow = tvRowIndex - 1;
+            setTvRowIndex(nextRow);
+            const count = activeRows[nextRow]?.items.length || 1;
+            const nextItemIdx = Math.min(tvItemIndex, count - 1);
+            setTvItemIndex(nextItemIdx);
+            const el = document.getElementById(`tv-card-${nextRow}-${nextItemIdx}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          } else {
+            if (billboardItem) {
+              setTvSection("hero");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            } else {
+              setTvSection("navbar");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          }
+        }
+        return;
+      }
+
+      // ArrowDown
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (tvSection === "navbar") {
+          if (billboardItem) {
+            setTvSection("hero");
+          } else if (activeRows.length > 0) {
+            setTvSection("rows");
+            setTvRowIndex(0);
+          }
+        } else if (tvSection === "hero") {
+          if (activeRows.length > 0) {
+            setTvSection("rows");
+            setTvRowIndex(0);
+            const count = activeRows[0]?.items.length || 1;
+            const nextItemIdx = Math.min(tvItemIndex, count - 1);
+            setTvItemIndex(nextItemIdx);
+            const el = document.getElementById(`tv-card-0-${nextItemIdx}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        } else if (tvSection === "rows") {
+          if (tvRowIndex < activeRows.length - 1) {
+            const nextRow = tvRowIndex + 1;
+            setTvRowIndex(nextRow);
+            const count = activeRows[nextRow]?.items.length || 1;
+            const nextItemIdx = Math.min(tvItemIndex, count - 1);
+            setTvItemIndex(nextItemIdx);
+            const el = document.getElementById(`tv-card-${nextRow}-${nextItemIdx}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }
+        return;
+      }
+
+      // ArrowLeft
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (tvSection === "navbar") {
+          setTvNavIndex((prev) => Math.max(0, prev - 1));
+        } else if (tvSection === "hero") {
+          setTvHeroBtnIndex((prev) => Math.max(0, prev - 1));
+        } else if (tvSection === "rows") {
+          setTvItemIndex((prev) => Math.max(0, prev - 1));
+        }
+        return;
+      }
+
+      // ArrowRight
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (tvSection === "navbar") {
+          setTvNavIndex((prev) => Math.min(8, prev + 1));
+        } else if (tvSection === "hero") {
+          setTvHeroBtnIndex((prev) => Math.min(2, prev + 1));
+        } else if (tvSection === "rows") {
+          const count = activeRows[tvRowIndex]?.items.length || 0;
+          if (count > 0) {
+            setTvItemIndex((prev) => Math.min(count - 1, prev + 1));
+          }
+        }
+        return;
+      }
+
+      // Enter or Space
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (tvSection === "navbar") {
+          if (tvNavIndex === 0 || tvNavIndex === 1) {
+            setActiveCategory("HOME");
+            setSearchQuery("");
+            setTvSection("hero");
+          } else if (tvNavIndex === 2) {
+            setActiveCategory("SERIES");
+            setSearchQuery("");
+            setTvSection("hero");
+          } else if (tvNavIndex === 3) {
+            setActiveCategory("MOVIES");
+            setSearchQuery("");
+            setTvSection("hero");
+          } else if (tvNavIndex === 4) {
+            setActiveCategory("LOCAL");
+            setSearchQuery("");
+          } else if (tvNavIndex === 5) {
+            setActiveCategory("PLAYLISTS");
+            setSearchQuery("");
+          } else if (tvNavIndex === 6) {
+            const inputEl = document.querySelector('input[placeholder*="Titles"]') as HTMLInputElement | null;
+            inputEl?.focus();
+          } else if (tvNavIndex === 7) {
+            toggleTvMode();
+          } else if (tvNavIndex === 8) {
+            setAccountModalOpen(true);
+          }
+        } else if (tvSection === "hero") {
+          if (!billboardItem) return;
+          if (tvHeroBtnIndex === 0) {
+            handlePlay(billboardItem);
+          } else if (tvHeroBtnIndex === 1) {
+            setDetailItem(billboardItem);
+          } else if (tvHeroBtnIndex === 2) {
+            handleToggleMyList(billboardItem);
+          }
+        } else if (tvSection === "rows") {
+          const focusedCard = activeRows[tvRowIndex]?.items[tvItemIndex];
+          if (focusedCard) {
+            handlePlay(focusedCard);
+          }
+        }
+        return;
+      }
+
+      // 'I' / 'i': More Info
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        if (tvSection === "hero" && billboardItem) {
+          setDetailItem(billboardItem);
+        } else if (tvSection === "rows") {
+          const focusedCard = activeRows[tvRowIndex]?.items[tvItemIndex];
+          if (focusedCard) {
+            setDetailItem(focusedCard);
+          }
+        }
+        return;
+      }
+
+      // 'C' / 'c': Toggle My List
+      if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        if (tvSection === "hero" && billboardItem) {
+          handleToggleMyList(billboardItem);
+        } else if (tvSection === "rows") {
+          const focusedCard = activeRows[tvRowIndex]?.items[tvItemIndex];
+          if (focusedCard) {
+            handleToggleMyList(focusedCard);
+          }
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    isTvMode,
+    tvSection,
+    tvNavIndex,
+    tvHeroBtnIndex,
+    tvRowIndex,
+    tvItemIndex,
+    activeRows,
+    billboardItem,
+    detailItem,
+    accountModalOpen,
+    adminModal.open,
+    identifyItem,
+    pendingSwitchProfile,
+    playingState,
+    toggleTvMode,
+    handlePlay,
+    handleToggleMyList,
+  ]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#141414] flex flex-col items-center justify-center gap-4">
@@ -646,6 +998,9 @@ export default function OwnFlixApp() {
         onOpenAdmin={(tab = "profiles") =>
           setAdminModal({ open: true, tab, editItem: null })
         }
+        isTvMode={isTvMode}
+        onToggleTvMode={toggleTvMode}
+        focusedNavIndex={isTvMode && tvSection === "navbar" ? tvNavIndex : null}
       />
 
       {/* Search Results Grid OR Category / Home View */}
@@ -869,6 +1224,8 @@ export default function OwnFlixApp() {
           {billboardItem && (
             <HeroBillboard
               item={billboardItem}
+              isTvMode={isTvMode}
+              focusedHeroBtnIndex={isTvMode && tvSection === "hero" ? tvHeroBtnIndex : null}
               onPlay={(item) => handlePlay(item)}
               onMoreInfo={(item) => setDetailItem(item)}
               onToggleMyList={handleToggleMyList}
@@ -876,88 +1233,27 @@ export default function OwnFlixApp() {
           )}
 
           <main className="relative z-20 -mt-16 md:-mt-28 space-y-2">
-            {continueWatchingItems.length > 0 && (
+            {activeRows.map((row, rIdx) => (
               <MediaRow
-                title={`Continue Watching for ${activeProfile.name}`}
-                items={continueWatchingItems}
-                isContinueWatching
+                key={row.id}
+                title={row.title}
+                subtitle={row.subtitle}
+                items={row.items}
+                isContinueWatching={row.isContinueWatching}
+                rowIndex={rIdx}
+                focusedItemIndex={
+                  isTvMode && tvSection === "rows" && tvRowIndex === rIdx
+                    ? tvItemIndex
+                    : null
+                }
+                isTvMode={isTvMode}
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
                 onRemoveContinueWatching={handleRemoveContinueWatching}
                 onOpenContextMenu={handleOpenContextMenu}
               />
-            )}
-
-            {/* Separated TV Shows Swimlane */}
-            {seriesItems.length > 0 && activeCategory !== "MOVIES" && (
-              <MediaRow
-                title="TV Shows"
-                subtitle="Multi-Episode Auto-Play & Skip Intro"
-                items={seriesItems}
-                onPlay={(item) => handlePlay(item)}
-                onMoreInfo={(item) => setDetailItem(item)}
-                onToggleMyList={handleToggleMyList}
-                onOpenContextMenu={handleOpenContextMenu}
-              />
-            )}
-
-            {/* Separated Movies Swimlane */}
-            {movieItems.length > 0 && activeCategory !== "SERIES" && (
-              <MediaRow
-                title="Movies"
-                subtitle="Direct HTTP 206 Range & Live Streaming"
-                items={movieItems}
-                onPlay={(item) => handlePlay(item)}
-                onMoreInfo={(item) => setDetailItem(item)}
-                onToggleMyList={handleToggleMyList}
-                onOpenContextMenu={handleOpenContextMenu}
-              />
-            )}
-
-            {myListItems.length > 0 && (
-              <MediaRow
-                title="My List"
-                items={myListItems}
-                onPlay={(item) => handlePlay(item)}
-                onMoreInfo={(item) => setDetailItem(item)}
-                onToggleMyList={handleToggleMyList}
-                onOpenContextMenu={handleOpenContextMenu}
-              />
-            )}
-
-            {comedyItems.length > 0 && (
-              <MediaRow
-                title="Comedy & Satire"
-                items={comedyItems}
-                onPlay={(item) => handlePlay(item)}
-                onMoreInfo={(item) => setDetailItem(item)}
-                onToggleMyList={handleToggleMyList}
-                onOpenContextMenu={handleOpenContextMenu}
-              />
-            )}
-
-            {sciFiItems.length > 0 && (
-              <MediaRow
-                title="Sci-Fi & Cyberpunk Worlds"
-                items={sciFiItems}
-                onPlay={(item) => handlePlay(item)}
-                onMoreInfo={(item) => setDetailItem(item)}
-                onToggleMyList={handleToggleMyList}
-                onOpenContextMenu={handleOpenContextMenu}
-              />
-            )}
-
-            {actionItems.length > 0 && (
-              <MediaRow
-                title="High-Octane Action & Thrillers"
-                items={actionItems}
-                onPlay={(item) => handlePlay(item)}
-                onMoreInfo={(item) => setDetailItem(item)}
-                onToggleMyList={handleToggleMyList}
-                onOpenContextMenu={handleOpenContextMenu}
-              />
-            )}
+            ))}
           </main>
         </>
       )}
@@ -1306,6 +1602,53 @@ export default function OwnFlixApp() {
           onClose={() => setAddToPlaylistItem(null)}
           onPlaylistUpdated={() => fetchMedia(activeProfile.id)}
         />
+      )}
+
+      {/* 10-foot TV Mode Floating Navigation HUD Pill */}
+      {isTvMode && (
+        <aside
+          role="region"
+          aria-label="TV Mode navigation controls"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#141414]/95 backdrop-blur-md border border-[#2563EB]/70 px-4 py-2 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.45)] text-xs text-zinc-200 select-none animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto"
+        >
+          <div className="flex items-center gap-1.5 font-bold text-[#3B82F6]">
+            <Tv className="w-4 h-4 animate-pulse text-[#3B82F6]" />
+            <span className="tracking-wide">TV MODE</span>
+          </div>
+          <span className="text-zinc-600">|</span>
+          <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+            <span className="bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-[11px] font-mono text-zinc-200">
+              ▲▼◀▶
+            </span>
+            <span>Navigate</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+            <span className="bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-[11px] font-mono text-zinc-200">
+              ENTER
+            </span>
+            <span>Play</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+            <span className="bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 rounded text-[11px] font-mono text-zinc-200">
+              I
+            </span>
+            <span>Info</span>
+          </div>
+          <span className="text-zinc-600">|</span>
+          <button
+            onClick={() => {
+              setIsTvMode(false);
+              if (typeof window !== "undefined") {
+                window.localStorage.setItem("ownflix_tv_mode", "false");
+              }
+            }}
+            className="text-zinc-400 hover:text-white flex items-center gap-1 text-[11px] bg-zinc-800/80 hover:bg-zinc-700 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+            title="Exit TV Mode (Esc / T)"
+          >
+            <span className="font-mono text-[10px]">ESC / T</span>
+            <span>Exit</span>
+          </button>
+        </aside>
       )}
     </div>
   );

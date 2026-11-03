@@ -9,6 +9,8 @@ interface HeroBillboardProps {
   onPlay: (item: MediaItem) => void;
   onMoreInfo: (item: MediaItem) => void;
   onToggleMyList: (item: MediaItem) => void;
+  isTvMode?: boolean;
+  focusedHeroBtnIndex?: number | null;
 }
 
 export default function HeroBillboard({
@@ -16,6 +18,8 @@ export default function HeroBillboard({
   onPlay,
   onMoreInfo,
   onToggleMyList,
+  isTvMode = false,
+  focusedHeroBtnIndex = null,
 }: HeroBillboardProps) {
   const hasProgress =
     item.progress &&
@@ -89,18 +93,26 @@ export default function HeroBillboard({
         </p>
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3.5">
           <button
             onClick={() => onPlay(item)}
-            className="flex items-center gap-2.5 bg-white hover:bg-white/85 text-black font-bold px-6 md:px-8 py-2.5 md:py-3 rounded text-sm md:text-base transition-colors shadow-lg"
+            className={`flex items-center gap-2.5 bg-white hover:bg-white/85 text-black font-bold px-6 md:px-8 py-2.5 md:py-3 rounded text-sm md:text-base transition-all shadow-lg ${
+              isTvMode && focusedHeroBtnIndex === 0
+                ? "ring-4 ring-[#2563EB] bg-[#3B82F6] text-white scale-110 shadow-[0_0_30px_rgba(37,99,235,1)]"
+                : ""
+            }`}
           >
-            <Play className="w-5 h-5 fill-black" />
+            <Play className={`w-5 h-5 ${isTvMode && focusedHeroBtnIndex === 0 ? "fill-white text-white" : "fill-black"}`} />
             <span>{hasProgress ? "Resume" : "Play"}</span>
           </button>
 
           <button
             onClick={() => onMoreInfo(item)}
-            className="flex items-center gap-2.5 bg-zinc-500/70 hover:bg-zinc-500/50 text-white font-semibold px-6 md:px-7 py-2.5 md:py-3 rounded text-sm md:text-base backdrop-blur-sm transition-colors"
+            className={`flex items-center gap-2.5 bg-zinc-500/70 hover:bg-zinc-500/50 text-white font-semibold px-6 md:px-7 py-2.5 md:py-3 rounded text-sm md:text-base backdrop-blur-sm transition-all ${
+              isTvMode && focusedHeroBtnIndex === 1
+                ? "ring-4 ring-[#2563EB] bg-[#2563EB] text-white scale-110 shadow-[0_0_30px_rgba(37,99,235,1)]"
+                : ""
+            }`}
           >
             <Info className="w-5 h-5" />
             <span>More Info</span>
@@ -108,7 +120,11 @@ export default function HeroBillboard({
 
           <button
             onClick={() => onToggleMyList(item)}
-            className="flex items-center justify-center w-11 h-11 rounded-full border-2 border-zinc-400 hover:border-white bg-black/40 text-white transition-colors"
+            className={`flex items-center justify-center w-11 h-11 rounded-full border-2 border-zinc-400 hover:border-white bg-black/40 text-white transition-all ${
+              isTvMode && focusedHeroBtnIndex === 2
+                ? "ring-4 ring-[#2563EB] border-[#3B82F6] bg-[#2563EB] scale-115 shadow-[0_0_30px_rgba(37,99,235,1)]"
+                : ""
+            }`}
             title={item.inMyList ? "Remove from My List" : "Add to My List"}
           >
             {item.inMyList ? (

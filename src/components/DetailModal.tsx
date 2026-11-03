@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { MediaItem, Episode } from "@/types/ownflix";
 import {
   X,
@@ -85,6 +85,22 @@ export default function DetailModal({
     !item.progress.completed;
 
   const isMkv = item.filePath?.toLowerCase().endsWith(".mkv");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "Enter") {
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+        e.preventDefault();
+        onPlay(item, seasonEpisodes[0] || item.episodes[0]);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [item, onClose, onPlay, seasonEpisodes]);
 
   return (
     <div
