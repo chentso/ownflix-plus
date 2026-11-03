@@ -94,7 +94,11 @@ export async function POST(req: NextRequest) {
         ? cleanMediaTitle(path.basename(item.filePath)).year
         : item.releaseYear);
 
-    const imdb = await fetchImdbMetadata(searchTitle, searchYear);
+    const imdb = await fetchImdbMetadata(
+      searchTitle,
+      searchYear,
+      item.type as "SERIES" | "MOVIE"
+    );
     if (!imdb) {
       return NextResponse.json(
         { error: `No IMDb match found for "${searchTitle}"` },
@@ -133,7 +137,11 @@ export async function POST(req: NextRequest) {
     const searchTitle = parsedFromFile?.title || item.title;
     const searchYear = parsedFromFile?.year || item.releaseYear;
 
-    const imdb = await fetchImdbMetadata(searchTitle, searchYear);
+    const imdb = await fetchImdbMetadata(
+      searchTitle,
+      searchYear,
+      item.type as "SERIES" | "MOVIE"
+    );
     if (imdb) {
       await prisma.mediaItem.update({
         where: { id: item.id },

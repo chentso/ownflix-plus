@@ -45,3 +45,9 @@ prisma/*.db-journal
 
 # local launcher scripts
 Launch_Android_Studio.bat
+
+# android build outputs
+android-tv/app/build/
+android-tv/.gradle/
+android-tv/local.properties
+*.tmp

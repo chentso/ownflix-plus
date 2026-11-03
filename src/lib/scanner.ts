@@ -146,9 +146,26 @@ function toTitleCase(str: string): string {
     .join(" ");
 }
 
+function normalizeContractions(text: string): string {
+  return text
+    .replace(/\b([a-zA-Z]+)[._]s\b/gi, "$1's")
+    .replace(/\b([a-zA-Z]+)[._]t\b/gi, "$1't")
+    .replace(/\b([a-zA-Z]+)[._]re\b/gi, "$1're")
+    .replace(/\b([a-zA-Z]+)[._]ve\b/gi, "$1've")
+    .replace(/\b([a-zA-Z]+)[._]ll\b/gi, "$1'll")
+    .replace(/\b([a-zA-Z]+)[._]d\b/gi, "$1'd");
+}
+
+export function normalizeTitleKey(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/['"’]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 export function cleanMediaTitle(rawName: string): {
   title: string;
-  year: number;
+  year?: number;
   season?: number;
   episode?: number;
   episodeTitle?: string;
@@ -160,30 +177,36 @@ export function cleanMediaTitle(rawName: string): {
     /^(.*?)[.\s_-]*[Ss](\d{1,2})[Ee](\d{1,3})(?:[.\s_-]+(.*))?$/
   );
   if (tvMatch) {
+    const rawShow = normalizeContractions(tvMatch[1]);
     const showTitle = toTitleCase(
-      tvMatch[1]
+      rawShow
         .replace(/[._]/g, " ")
         .replace(/\s+/g, " ")
         .trim()
     );
     const season = parseInt(tvMatch[2], 10);
     const episode = parseInt(tvMatch[3], 10);
-    const epRaw = toTitleCase(
-      (tvMatch[4] || "")
-        .replace(
-          /\b(1080p|720p|2160p|4k|x264|x265|hevc|bluray|web-dl|webrip|aac)\b.*/i,
-          ""
-        )
-        .replace(/[._]/g, " ")
-        .trim()
-    );
+
+    const rawEp = (tvMatch[4] || "").replace(/[._]/g, " ").trim();
+    const epCleaned = rawEp
+      .replace(
+        /\b(1080p|720p|2160p|4k|x264|x265|hevc|10bit|bluray|web-dl|webrip|web|hdtv|6ch|5\.1|aac|dts|rmteam|psa|rapidmoviez|eztv|yify|yts)\b.*/i,
+        ""
+      )
+      .replace(/www\.[a-z0-9-]+\.[a-z]+/gi, "")
+      .trim();
+
+    const epTitle = epCleaned ? toTitleCase(epCleaned) : `Episode ${episode}`;
+
+    const showYearMatch = showTitle.match(/\b((?:19|20)\d{2})\b/);
+    const year = showYearMatch ? parseInt(showYearMatch[1], 10) : undefined;
 
     return {
       title: showTitle || "Unknown Series",
-      year: new Date().getFullYear(),
+      year,
       season,
       episode,
-      episodeTitle: epRaw || `Episode ${episode}`,
+      episodeTitle: epTitle,
     };
   }
 
@@ -192,8 +215,9 @@ export function cleanMediaTitle(rawName: string): {
     /^(.*?)[.\s([_-]+((?:19|20)\d{2})(?:[\]).\s_-]|$)/
   );
   if (yearMatch) {
+    const rawTitle = normalizeContractions(yearMatch[1]);
     const clean = toTitleCase(
-      yearMatch[1].replace(/[._]/g, " ").replace(/\s+/g, " ").trim()
+      rawTitle.replace(/[._]/g, " ").replace(/\s+/g, " ").trim()
     );
     return {
       title: clean || withoutExt,
@@ -201,12 +225,14 @@ export function cleanMediaTitle(rawName: string): {
     };
   }
 
+  const rawTitle = normalizeContractions(withoutExt);
   const stripped = toTitleCase(
-    withoutExt
+    rawTitle
       .replace(
-        /\b(1080p|720p|2160p|4k|x264|x265|hevc|bluray|web-dl|webrip|hdr)\b.*/i,
+        /\b(1080p|720p|2160p|4k|x264|x265|hevc|10bit|bluray|web-dl|webrip|web|hdtv|hdr)\b.*/i,
         ""
       )
+      .replace(/www\.[a-z0-9-]+\.[a-z]+/gi, "")
       .replace(/[._]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
@@ -214,7 +240,7 @@ export function cleanMediaTitle(rawName: string): {
 
   return {
     title: stripped || withoutExt,
-    year: 2024,
+    year: undefined,
   };
 }
 
@@ -284,21 +310,77 @@ export async function scanLibraryFolder(folderId: string): Promise<{
     if (isEpisode) {
       const seasonNum = parsed.season ?? 1;
       const episodeNum = parsed.episode ?? 1;
-      const seriesTitle = parsed.title;
 
-      let series = await prisma.mediaItem.findFirst({
-        where: {
-          title: seriesTitle,
-          type: "SERIES",
-        },
-      });
+      // Extract show directory and folder-based series title
+      const relPath = path.relative(folder.path, filePath);
+      const pathParts = relPath.split(path.sep);
+      let seriesDir: string | undefined;
+      let effectiveSeriesTitle = parsed.title;
 
+      if (pathParts.length > 1) {
+        seriesDir = path.join(folder.path, pathParts[0]);
+        const cleanedFolderName = toTitleCase(
+          normalizeContractions(pathParts[0])
+            .replace(/[._]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+        );
+        if (cleanedFolderName) {
+          effectiveSeriesTitle = cleanedFolderName;
+        }
+      }
+
+      let series: any = null;
+
+      // 1. Check if any sibling episode in the same show directory is already attached to a series
+      if (seriesDir) {
+        const existingSibling = await prisma.episode.findFirst({
+          where: {
+            filePath: {
+              startsWith: seriesDir,
+            },
+          },
+          include: {
+            mediaItem: true,
+          },
+        });
+        if (existingSibling?.mediaItem) {
+          series = existingSibling.mediaItem;
+        }
+      }
+
+      // 2. Exact title match
+      if (!series) {
+        series = await prisma.mediaItem.findFirst({
+          where: {
+            title: effectiveSeriesTitle,
+            type: "SERIES",
+          },
+        });
+      }
+
+      // 3. Fuzzy normalized title match against existing SERIES in DB
+      if (!series) {
+        const allSeries = await prisma.mediaItem.findMany({
+          where: { type: "SERIES" },
+        });
+        const targetKey = normalizeTitleKey(effectiveSeriesTitle);
+        series =
+          allSeries.find((s) => normalizeTitleKey(s.title) === targetKey) ||
+          null;
+      }
+
+      // 4. Create new series if none found
       if (!series) {
         const probe = await probeMediaFile(filePath);
-        const imdb = await fetchImdbMetadata(seriesTitle, parsed.year);
+        const imdb = await fetchImdbMetadata(
+          effectiveSeriesTitle,
+          parsed.year,
+          "SERIES"
+        );
         series = await prisma.mediaItem.create({
           data: {
-            title: imdb?.title || seriesTitle,
+            title: imdb?.title || effectiveSeriesTitle,
             overview:
               imdb?.overview ||
               `Local series scanned from ${folder.name} (${path.dirname(
@@ -306,7 +388,7 @@ export async function scanLibraryFolder(folderId: string): Promise<{
               )}). Streamed directly from your disk.`,
             tagline: imdb?.tagline || `Local Series • ${probe.resolution}`,
             type: "SERIES",
-            releaseYear: imdb?.year || parsed.year,
+            releaseYear: imdb?.year || parsed.year || new Date().getFullYear(),
             maturityRating: imdb?.maturityRating || "TV-14",
             genres: imdb?.genres || "Local Library, Drama, Series",
             cast: imdb?.cast || "Local Media Collection",
@@ -327,6 +409,14 @@ export async function scanLibraryFolder(folderId: string): Promise<{
       });
 
       if (existingEp) {
+        // Ensure episode is linked to authoritative series
+        if (existingEp.mediaItemId !== series.id) {
+          await prisma.episode.update({
+            where: { id: existingEp.id },
+            data: { mediaItemId: series.id },
+          });
+        }
+
         // Caching: Only re-process if the video file has completely changed on disk
         const fileHasChanged =
           !existingEp.fileSignature || existingEp.fileSignature !== currentSig;
@@ -336,7 +426,10 @@ export async function scanLibraryFolder(folderId: string): Promise<{
           const siblingPaths = videoFiles.filter(
             (p) =>
               p !== filePath &&
-              cleanMediaTitle(path.basename(p)).title === seriesTitle
+              (seriesDir
+                ? p.startsWith(seriesDir)
+                : normalizeTitleKey(cleanMediaTitle(path.basename(p)).title) ===
+                  normalizeTitleKey(effectiveSeriesTitle))
           );
           const intro = await detectVideoIntro(filePath, probe.duration, {
             isSeries: true,
@@ -361,7 +454,10 @@ export async function scanLibraryFolder(folderId: string): Promise<{
         const siblingPaths = videoFiles.filter(
           (p) =>
             p !== filePath &&
-            cleanMediaTitle(path.basename(p)).title === seriesTitle
+            (seriesDir
+              ? p.startsWith(seriesDir)
+              : normalizeTitleKey(cleanMediaTitle(path.basename(p)).title) ===
+                normalizeTitleKey(effectiveSeriesTitle))
         );
         const intro = await detectVideoIntro(filePath, probe.duration, {
           isSeries: true,

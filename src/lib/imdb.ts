@@ -30,13 +30,16 @@ export interface SuggestionItem {
 
 export async function searchImdbCandidates(
   query: string,
-  preferredYear?: number
+  preferredYear?: number,
+  mediaType?: "SERIES" | "MOVIE"
 ): Promise<SuggestionItem[]> {
   const cleanQuery = query
     .replace(/[^\w\s'-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (!cleanQuery) return [];
+
+  const normQuery = cleanQuery.toLowerCase().replace(/[^a-z0-9]/g, "");
 
   const searchTerms =
     preferredYear && preferredYear > 1900
@@ -64,13 +67,47 @@ export async function searchImdbCandidates(
           )
         : [];
       if (items.length > 0) {
-        if (preferredYear) {
-          items.sort((a, b) => {
+        items.sort((a, b) => {
+          const normA = (a.l || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const normB = (b.l || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const exactA = normA === normQuery ? 1 : 0;
+          const exactB = normB === normQuery ? 1 : 0;
+          if (exactA !== exactB) return exactB - exactA;
+
+          if (mediaType === "SERIES") {
+            const isTvA =
+              (a.qid && /tv/i.test(a.qid)) ||
+              (a.q && /(tv|series)/i.test(a.q))
+                ? 1
+                : 0;
+            const isTvB =
+              (b.qid && /tv/i.test(b.qid)) ||
+              (b.q && /(tv|series)/i.test(b.q))
+                ? 1
+                : 0;
+            if (isTvA !== isTvB) return isTvB - isTvA;
+          } else if (mediaType === "MOVIE") {
+            const isMovieA =
+              (a.qid && /movie/i.test(a.qid)) ||
+              (a.q && /feature|movie/i.test(a.q))
+                ? 1
+                : 0;
+            const isMovieB =
+              (b.qid && /movie/i.test(b.qid)) ||
+              (b.q && /feature|movie/i.test(b.q))
+                ? 1
+                : 0;
+            if (isMovieA !== isMovieB) return isMovieB - isMovieA;
+          }
+
+          if (preferredYear) {
             const diffA = a.y ? Math.abs(a.y - preferredYear) : 999;
             const diffB = b.y ? Math.abs(b.y - preferredYear) : 999;
-            return diffA - diffB;
-          });
-        }
+            if (diffA !== diffB) return diffA - diffB;
+          }
+
+          return 0;
+        });
         return items;
       }
     } catch {
@@ -245,14 +282,15 @@ export async function fetchImdbById(
 
 export async function fetchImdbMetadata(
   titleOrId: string,
-  preferredYear?: number
+  preferredYear?: number,
+  mediaType?: "SERIES" | "MOVIE"
 ): Promise<ImdbMetadata | null> {
   const trimmed = titleOrId.trim();
   if (/^tt\d{5,}$/i.test(trimmed)) {
     return fetchImdbById(trimmed.toLowerCase());
   }
 
-  const candidates = await searchImdbCandidates(trimmed, preferredYear);
+  const candidates = await searchImdbCandidates(trimmed, preferredYear, mediaType);
   if (candidates.length === 0) {
     return null;
   }
