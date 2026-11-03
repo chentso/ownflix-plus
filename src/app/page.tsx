@@ -519,6 +519,19 @@ export default function OwnFlixApp() {
     [profileFilteredMedia]
   );
 
+  const movieItems = useMemo(
+    () => profileFilteredMedia.filter((m) => m.type === "MOVIE"),
+    [profileFilteredMedia]
+  );
+
+  const comedyItems = useMemo(
+    () =>
+      profileFilteredMedia.filter((m) =>
+        m.genres.toLowerCase().includes("comedy")
+      ),
+    [profileFilteredMedia]
+  );
+
   const sciFiItems = useMemo(
     () =>
       profileFilteredMedia.filter((m) =>
@@ -876,11 +889,12 @@ export default function OwnFlixApp() {
               />
             )}
 
-            {localDiskItems.length > 0 && (
+            {/* Separated TV Shows Swimlane */}
+            {seriesItems.length > 0 && activeCategory !== "MOVIES" && (
               <MediaRow
-                title="Streamed from Your Local Disk"
-                subtitle="Direct HTTP 206 Range & FFmpeg Live MKV Remux"
-                items={localDiskItems}
+                title="TV Shows"
+                subtitle="Multi-Episode Auto-Play & Skip Intro"
+                items={seriesItems}
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}
@@ -888,14 +902,18 @@ export default function OwnFlixApp() {
               />
             )}
 
-            <MediaRow
-              title="Trending Now"
-              items={categoryMedia}
-              onPlay={(item) => handlePlay(item)}
-              onMoreInfo={(item) => setDetailItem(item)}
-              onToggleMyList={handleToggleMyList}
-              onOpenContextMenu={handleOpenContextMenu}
-            />
+            {/* Separated Movies Swimlane */}
+            {movieItems.length > 0 && activeCategory !== "SERIES" && (
+              <MediaRow
+                title="Movies"
+                subtitle="Direct HTTP 206 Range & Live Streaming"
+                items={movieItems}
+                onPlay={(item) => handlePlay(item)}
+                onMoreInfo={(item) => setDetailItem(item)}
+                onToggleMyList={handleToggleMyList}
+                onOpenContextMenu={handleOpenContextMenu}
+              />
+            )}
 
             {myListItems.length > 0 && (
               <MediaRow
@@ -908,11 +926,10 @@ export default function OwnFlixApp() {
               />
             )}
 
-            {seriesItems.length > 0 && activeCategory !== "MOVIES" && (
+            {comedyItems.length > 0 && (
               <MediaRow
-                title="Binge-Worthy TV Series"
-                subtitle="Multi-Episode Auto-Play & Skip Intro"
-                items={seriesItems}
+                title="Comedy & Satire"
+                items={comedyItems}
                 onPlay={(item) => handlePlay(item)}
                 onMoreInfo={(item) => setDetailItem(item)}
                 onToggleMyList={handleToggleMyList}

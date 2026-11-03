@@ -135,34 +135,23 @@ fun HomeScreen(
                     }
                 }
 
-                // Swimlane 3: Trending Movies
-                if (movies.isNotEmpty()) {
-                    item {
-                        MediaRow(
-                            title = "Trending Movies",
-                            items = movies,
-                            onItemClick = onMediaClick
-                        )
-                    }
-                }
-
-                // Swimlane 4: TV Shows & Series
+                // Swimlane 3: TV Shows & Series
                 if (series.isNotEmpty()) {
                     item {
                         MediaRow(
-                            title = "TV Series & Shows",
+                            title = "TV Shows",
                             items = series,
                             onItemClick = onMediaClick
                         )
                     }
                 }
 
-                // Swimlane 5: Local Disk Direct Streams
-                if (localDiskItems.isNotEmpty()) {
+                // Swimlane 4: Movies
+                if (movies.isNotEmpty()) {
                     item {
                         MediaRow(
-                            title = "Streamed from Your Local Disk",
-                            items = localDiskItems,
+                            title = "Movies",
+                            items = movies,
                             onItemClick = onMediaClick
                         )
                     }
